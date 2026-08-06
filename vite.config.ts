@@ -8,6 +8,7 @@ const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   root: 'app',
+  base: '/nominator-dapp/',
   envDir: projectRoot,
   envPrefix: ['VITE_', 'TONCENTER_'],
   plugins: [react(), tailwindcss()],

@@ -6,6 +6,8 @@ interface Route {
   isTestnet: boolean;
 }
 
+const base = import.meta.env.BASE_URL;
+
 function parseRoute(): Route {
   const params = new URLSearchParams(window.location.search);
   return { isTestnet: params.get('testnet') === 'true' };
@@ -15,7 +17,7 @@ function buildUrl(testnet: boolean) {
   const params = new URLSearchParams();
   if (testnet) params.set('testnet', 'true');
   const search = params.toString();
-  return search ? `/?${search}` : '/';
+  return search ? `${base}?${search}` : base;
 }
 
 function push(url: string) {
