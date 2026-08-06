@@ -1,0 +1,462 @@
+import { useMemo, useState } from 'react';
+import {
+  useIsConnectionRestored,
+  useTonAddress,
+  useTonConnectUI,
+} from '@tonconnect/ui-react';
+
+import { Button } from '@/components/ui/button';
+import { Field, AddrLink } from '@/components/ui/form';
+import { ShareInput } from '@/components/ui/ShareInput';
+import { RoundAllowanceSelect } from '@/components/ui/RoundAllowanceSelect';
+import { useToast } from '@/components/ui/toast';
+import { useRouter } from '@/lib/router';
+import { prettyError } from '@/lib/errors';
+import { getWalletBaselineLt, waitForInitResult } from '@/lib/refund';
+import { tonscanTxUrl, formatAddressForNetwork } from '@/lib/ton';
+import {
+  deployAndInitPool,
+  makeLimitShare,
+  makeLimitTon,
+  makeSender,
+  poolAddress,
+  SHARE_BASE,
+  validateBigIntInput,
+  validateGramInput,
+  validateInitParams,
+  validateNumberInput,
+} from '@/lib/pool';
+
+export function DeployInitPanel({
+  onPoolAddress,
+}: {
+  onPoolAddress: (addr: string) => void;
+}) {
+  const { network } = useRouter();
+  const wallet = useTonAddress();
+  const restored = useIsConnectionRestored();
+  const [tc] = useTonConnectUI();
+  const sender = useMemo(
+    () => (tc && wallet && tc.account ? makeSender(tc, network) : null),
+    [tc, network, wallet],
+  );
+
+  // deploy params
+  const [poolId, setPoolId] = useState('0');
+
+  // init params
+  const [mainValidator, setMainValidator] = useState('');
+  const [roundAllowance, setRoundAllowance] = useState('3');
+  const [ownerShare, setOwnerShare] = useState('8388608'); // SHARE_BASE / 2 = 50%
+  const [ownerShareMode, setOwnerShareMode] = useState<'percent' | 'share'>(
+    'percent',
+  );
+  const [ownerSharePercent, setOwnerSharePercent] = useState('50.00');
+  const [maxTonPerValidator, setMaxTonPerValidator] = useState('10000000');
+  const [minTonPerValidator, setMinTonPerValidator] = useState('300000');
+  const [refundBonus, setRefundBonus] = useState('3');
+  const [maxNominators, setMaxNominators] = useState('1023');
+  const [minStake, setMinStake] = useState('1000');
+  const [minWithdrawableRewards, setMinWithdrawableRewards] = useState('1');
+  const [initValue, setInitValue] = useState('250');
+
+  // main validator limit (applied at init time)
+  const [limitType, setLimitType] = useState<'global' | 'ton' | 'share'>(
+    'global',
+  );
+  const [limitTonMax, setLimitTonMax] = useState('1000000');
+  const [limitShareMax, setLimitShareMax] = useState('8388608');
+
+  const [busy, setBusy] = useState(false);
+
+  const toast = useToast();
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const setErr = (field: string, msg: string) =>
+    setFieldErrors((p) => ({ ...p, [field]: msg }));
+  const clearErr = (field: string) =>
+    setFieldErrors((p) => {
+      if (!(field in p)) return p;
+      const n = { ...p };
+      delete n[field];
+      return n;
+    });
+  const withClear =
+    (setter: (v: string) => void, field: string) => (v: string) => {
+      setter(v);
+      clearErr(field);
+    };
+  const clearAllErr = () => setFieldErrors({});
+
+  // The connected wallet is the pool owner — it deploys and initializes.
+  const owner = wallet
+    ? (() => {
+        try {
+          return formatAddressForNetwork(wallet, network);
+        } catch {
+          return wallet;
+        }
+      })()
+    : '';
+
+  const computedAddr = useMemo(() => {
+    if (!owner) return '';
+    try {
+      return poolAddress({ owner, poolId: Number(poolId), value: 0n }, network);
+    } catch {
+      return '';
+    }
+  }, [owner, poolId, network]);
+
+  async function onDeployAndInit() {
+    if (!sender) {
+      toast.error('Connect your wallet first.');
+      return;
+    }
+    if (!owner) {
+      toast.error(
+        'Could not determine owner address from the connected wallet.',
+      );
+      return;
+    }
+    const pid = validateNumberInput(poolId, 'poolId', setErr, clearErr);
+    if (pid === null) return;
+    const ownerShareVal = validateBigIntInput(
+      ownerShare,
+      'ownerShare',
+      setErr,
+      clearErr,
+    );
+    if (ownerShareVal === null) return;
+    const maxTonPerValidatorVal = validateGramInput(
+      maxTonPerValidator,
+      'maxTonPerValidator',
+      setErr,
+      clearErr,
+    );
+    if (maxTonPerValidatorVal === null) return;
+    const minTonPerValidatorVal = validateGramInput(
+      minTonPerValidator,
+      'minTonPerValidator',
+      setErr,
+      clearErr,
+    );
+    if (minTonPerValidatorVal === null) return;
+    const refundBonusVal = validateGramInput(
+      refundBonus,
+      'refundBonus',
+      setErr,
+      clearErr,
+    );
+    if (refundBonusVal === null) return;
+    const maxNominatorsVal = validateNumberInput(
+      maxNominators,
+      'maxNominators',
+      setErr,
+      clearErr,
+    );
+    if (maxNominatorsVal === null) return;
+    const minStakeVal = validateGramInput(
+      minStake,
+      'minStake',
+      setErr,
+      clearErr,
+    );
+    if (minStakeVal === null) return;
+    const minWithdrawableRewardsVal = validateGramInput(
+      minWithdrawableRewards,
+      'minWithdrawableRewards',
+      setErr,
+      clearErr,
+    );
+    if (minWithdrawableRewardsVal === null) return;
+    const initValueVal = validateGramInput(
+      initValue,
+      'initValue',
+      setErr,
+      clearErr,
+    );
+    if (initValueVal === null) return;
+    // Build the per-validator limit for the main validator. 'global' means
+    // null (the validator uses the pool's global range).
+    let limit = null;
+    if (limitType === 'ton') {
+      const maxTon = validateGramInput(
+        limitTonMax,
+        'limitTonMax',
+        setErr,
+        clearErr,
+      );
+      if (maxTon === null) return;
+      limit = makeLimitTon(maxTon);
+    } else if (limitType === 'share') {
+      const ms = validateBigIntInput(
+        limitShareMax,
+        'limitShareMax',
+        setErr,
+        clearErr,
+      );
+      if (ms === null) return;
+      if (ms < 0n || ms > SHARE_BASE) {
+        setErr('limitShareMax', `maxShare must be in 0..${SHARE_BASE}.`);
+        return;
+      }
+      limit = makeLimitShare(ms);
+    }
+    const initParams = {
+      mainValidator,
+      roundAllowance: BigInt(roundAllowance),
+      ownerShare: ownerShareVal,
+      maxTonPerValidator: maxTonPerValidatorVal,
+      minTonPerValidator: minTonPerValidatorVal,
+      refundBonus: refundBonusVal,
+      maxNominators: maxNominatorsVal,
+      minStake: minStakeVal,
+      minWithdrawableRewards: minWithdrawableRewardsVal,
+      value: initValueVal,
+      limit,
+    };
+    const verr = validateInitParams({
+      poolAddress: computedAddr,
+      ...initParams,
+    });
+    if (verr) {
+      setErr('mainValidator', `Invalid: ${verr}`);
+      return;
+    }
+    clearAllErr();
+    setBusy(true);
+    const pendingId = toast.pending('Sending deploy & init transaction...');
+    try {
+      const baselineLt = await getWalletBaselineLt(network, wallet);
+      await deployAndInitPool(
+        network,
+        sender!,
+        { owner, poolId: pid, value: 0n },
+        initParams,
+      );
+      onPoolAddress(computedAddr);
+
+      toast.update(
+        pendingId,
+        'Transaction sent. Waiting for the pool to confirm on-chain...',
+      );
+      const result = await waitForInitResult(
+        network,
+        wallet,
+        computedAddr,
+        baselineLt,
+      );
+      toast.dismiss(pendingId);
+      if (result.status === 'success') {
+        toast.info(
+          `Pool deployed and initialized successfully (queryId ${result.queryId}).`,
+        );
+      } else if (result.status === 'bounced') {
+        toast.error(
+          <>
+            {'Deploy & init was rejected by the contract (message bounced back). ' +
+              'Re-check the parameters against the network staking limits and the owner share. '}
+            {result.sendTxHash && (
+              <a
+                href={tonscanTxUrl(network, result.sendTxHash)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline text-primary break-all"
+              >
+                {tonscanTxUrl(network, result.sendTxHash)}
+              </a>
+            )}
+          </>,
+        );
+      } else {
+        toast.warn(
+          <>
+            {'Transaction sent, but no confirmation was received within the timeout. ' +
+              'Check the result in a block explorer. '}
+            {result.sendTxHash ? (
+              <a
+                href={tonscanTxUrl(network, result.sendTxHash)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline text-primary break-all"
+              >
+                {tonscanTxUrl(network, result.sendTxHash)}
+              </a>
+            ) : (
+              `Pool address: ${computedAddr}`
+            )}
+          </>,
+        );
+      }
+    } catch (e) {
+      toast.dismiss(pendingId);
+      toast.error(prettyError('Deploy & Initialize', e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!sender) {
+    return (
+      <div className="w-full max-w-md rounded-xl border p-6 text-center">
+        <p className="text-muted-foreground text-[14px]">
+          {restored
+            ? 'Connect your wallet to deploy and initialize the pool.'
+            : 'Restoring wallet connection...'}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full max-w-xl flex flex-col gap-6 text-left">
+      <section className="rounded-xl border p-5 flex flex-col gap-3">
+        <h2 className="text-[15px] font-semibold">Deploy & Initialize pool</h2>
+        <p className="text-muted-foreground text-[12px]">
+          Deploys the pool contract and initializes it with the main validator,
+          limits, and nominator settings in a single flow. The connected wallet
+          is the pool owner.
+        </p>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-muted-foreground text-[12px]">
+            Owner (connected wallet)
+          </span>
+          {owner ? (
+            <AddrLink addr={owner} network={network} />
+          ) : (
+            <span className="font-mono text-[13px]">—</span>
+          )}
+        </div>
+        <Field
+          label="Pool ID"
+          type="number"
+          value={poolId}
+          onChange={withClear(setPoolId, 'poolId')}
+          placeholder="0"
+        />
+        <Field
+          label="Main validator address"
+          value={mainValidator}
+          onChange={withClear(setMainValidator, 'mainValidator')}
+          placeholder="UQ..."
+          error={fieldErrors.mainValidator}
+        />
+        <RoundAllowanceSelect
+          value={roundAllowance}
+          onChange={setRoundAllowance}
+        />
+        <label className="flex flex-col gap-1 text-left">
+          <span className="text-muted-foreground text-[12px]">
+            Main validator limit
+          </span>
+          <select
+            value={limitType}
+            onChange={(e) => {
+              setLimitType(e.target.value as 'global' | 'ton' | 'share');
+              clearErr('limitTonMax');
+              clearErr('limitShareMax');
+            }}
+            className="h-9 rounded-md border border-input bg-background px-3 text-[13px]"
+          >
+            <option value="global">Global (use pool limits)</option>
+            <option value="ton">GRAM max</option>
+            <option value="share">Share max</option>
+          </select>
+        </label>
+        {limitType === 'ton' && (
+          <Field
+            label="Max GRAM for main validator"
+            type="number"
+            value={limitTonMax}
+            onChange={withClear(setLimitTonMax, 'limitTonMax')}
+            error={fieldErrors.limitTonMax}
+          />
+        )}
+        {limitType === 'share' && (
+          <Field
+            label={`Max share for main validator (0..${SHARE_BASE})`}
+            type="number"
+            value={limitShareMax}
+            onChange={withClear(setLimitShareMax, 'limitShareMax')}
+            error={fieldErrors.limitShareMax}
+          />
+        )}
+        <div className="grid grid-cols-2 gap-3 items-start">
+          <ShareInput
+            share={ownerShare}
+            onShareChange={(v) => setOwnerShare(v)}
+            mode={ownerShareMode}
+            onModeChange={setOwnerShareMode}
+            percentInput={ownerSharePercent}
+            onPercentInputChange={setOwnerSharePercent}
+            label="Owner share"
+            error={fieldErrors.ownerShare}
+            onClearError={() => clearErr('ownerShare')}
+          />
+          <Field
+            label="Max nominators (0..1023)"
+            type="number"
+            value={maxNominators}
+            onChange={withClear(setMaxNominators, 'maxNominators')}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field
+            label="Max GRAM / validator"
+            type="number"
+            value={maxTonPerValidator}
+            onChange={withClear(setMaxTonPerValidator, 'maxTonPerValidator')}
+          />
+          <Field
+            label="Min GRAM / validator"
+            type="number"
+            value={minTonPerValidator}
+            onChange={withClear(setMinTonPerValidator, 'minTonPerValidator')}
+          />
+        </div>
+        <Field
+          label="Refund bonus (GRAM)"
+          type="number"
+          value={refundBonus}
+          onChange={withClear(setRefundBonus, 'refundBonus')}
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <Field
+            label="Min stake (GRAM)"
+            type="number"
+            value={minStake}
+            onChange={withClear(setMinStake, 'minStake')}
+          />
+          <Field
+            label="Min withdrawable rewards (GRAM)"
+            type="number"
+            value={minWithdrawableRewards}
+            onChange={withClear(
+              setMinWithdrawableRewards,
+              'minWithdrawableRewards',
+            )}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field
+            label="Init value (GRAM, covers proxies + reserve)"
+            type="number"
+            value={initValue}
+            onChange={withClear(setInitValue, 'initValue')}
+          />
+        </div>
+        {computedAddr && (
+          <div className="flex flex-col gap-0.5">
+            <span className="text-muted-foreground text-[12px]">
+              Computed pool address
+            </span>
+            <AddrLink addr={computedAddr} network={network} />
+          </div>
+        )}
+        <Button onClick={onDeployAndInit} disabled={busy || !mainValidator}>
+          {busy ? 'Working...' : 'Deploy & Initialize'}
+        </Button>
+      </section>
+    </div>
+  );
+}

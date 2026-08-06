@@ -1,0 +1,97 @@
+import { fromNano } from '@ton/core';
+import { SHARE_BASE, shareToPercent, percentToShare } from '@/lib/pool';
+import { Field } from './form';
+
+// Reusable share input with a percent/raw toggle and an info line showing the
+// resulting raw share value. Used by Deploy & Init (owner share), Add
+// Validator (per-validator limit), and Individual Validator Limit.
+//
+// `share` is the raw share string (0..SHARE_BASE). `onShareChange` receives
+// the new raw share string. When `projectedBalance` is provided, the info
+// line also shows the approximate GRAM value of the share.
+export function ShareInput({
+  share,
+  onShareChange,
+  mode,
+  onModeChange,
+  percentInput,
+  onPercentInputChange,
+  label,
+  error,
+  onClearError,
+  projectedBalance,
+}: {
+  share: string;
+  onShareChange: (v: string) => void;
+  mode: 'percent' | 'share';
+  onModeChange: (mode: 'percent' | 'share') => void;
+  percentInput: string;
+  onPercentInputChange: (v: string) => void;
+  label: string;
+  error?: string;
+  onClearError: () => void;
+  projectedBalance?: bigint;
+}) {
+  return (
+    <>
+      <label className="flex flex-col gap-1 text-left">
+        <span className="text-muted-foreground text-[12px]">
+          {label} input mode
+        </span>
+        <select
+          value={mode}
+          onChange={(e) => {
+            const next = e.target.value as 'percent' | 'share';
+            if (next === 'percent') {
+              onPercentInputChange(shareToPercent(BigInt(share || '0')));
+            }
+            onModeChange(next);
+          }}
+          className="h-9 rounded-md border border-input bg-background px-3 text-[13px]"
+        >
+          <option value="percent">Percentage (%)</option>
+          <option value="share">Raw share (0..{SHARE_BASE.toString()})</option>
+        </select>
+      </label>
+      <Field
+        label={
+          mode === 'percent' ? `${label} (%)` : `${label} (0..${SHARE_BASE})`
+        }
+        type="number"
+        value={mode === 'percent' ? percentInput : share}
+        onChange={(v) => {
+          if (mode === 'percent') {
+            onPercentInputChange(v);
+            onShareChange(percentToShare(v));
+          } else {
+            onShareChange(v);
+          }
+          onClearError();
+        }}
+        error={error}
+      />
+      {(() => {
+        const rawShare = BigInt(share || '0');
+        const approx =
+          projectedBalance !== undefined
+            ? (rawShare * projectedBalance) / SHARE_BASE
+            : undefined;
+        return (
+          <p className="text-muted-foreground text-[12px]">
+            {shareToPercent(rawShare)}% of projected balance
+            {' · '}
+            <span className="font-mono">
+              share {rawShare.toString()} / {SHARE_BASE.toString()}
+            </span>
+            {approx !== undefined && (
+              <>
+                {' · ≈ '}
+                <span className="font-mono">{fromNano(approx)} GRAM</span>
+              </>
+            )}
+          </p>
+        );
+      })()}
+    </>
+  );
+}
