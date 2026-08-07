@@ -220,7 +220,8 @@ export function DeployInitPanel({
       ...initParams,
     });
     if (verr) {
-      setErr('mainValidator', `Invalid: ${verr}`);
+      const field = verr.slice(0, verr.indexOf(' '));
+      setErr(field || 'mainValidator', verr);
       return;
     }
     clearAllErr();
@@ -398,6 +399,7 @@ export function DeployInitPanel({
             type="number"
             value={maxNominators}
             onChange={withClear(setMaxNominators, 'maxNominators')}
+            error={fieldErrors.maxNominators}
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -406,6 +408,7 @@ export function DeployInitPanel({
             type="number"
             value={maxTonPerValidator}
             onChange={withClear(setMaxTonPerValidator, 'maxTonPerValidator')}
+            error={fieldErrors.maxTonPerValidator}
           />
           <Field
             label="Min GRAM / validator"
