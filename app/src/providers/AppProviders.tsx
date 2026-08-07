@@ -7,7 +7,7 @@ import { ToastProvider } from '../components/ui/ToastProvider';
 
 const manifestUrl = import.meta.env.DEV
   ? 'https://ton-blockchain.github.io/acton/tonconnect-manifest.json'
-  : `${import.meta.env.BASE_URL}tonconnect-manifest.json`;
+  : `${window.location.origin}${import.meta.env.BASE_URL}tonconnect-manifest.json`;
 
 const darkColors = {
   background: {
