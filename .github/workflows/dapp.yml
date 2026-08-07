@@ -53,6 +53,10 @@ jobs:
         run: npm run typecheck
 
       - name: Build
+
+        env:
+          VITE_DEPLOY_ORIGIN: ${{ vars.VITE_DEPLOY_ORIGIN }}
+
         run: npm run build
 
       - name: Test
