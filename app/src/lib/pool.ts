@@ -35,6 +35,7 @@ export function shareToPercent(share: bigint): string {
   return ((Number(share) / Number(SHARE_BASE)) * 100).toFixed(2);
 }
 export function percentToShare(percent: string): string {
+  if (!percent.trim()) return '';
   const n = Number(percent);
   if (!Number.isFinite(n)) return '0';
   return BigInt(Math.round((n / 100) * Number(SHARE_BASE))).toString();
