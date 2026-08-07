@@ -7,8 +7,10 @@ import { Field } from './form';
 // Validator (per-validator limit), and Individual Validator Limit.
 //
 // `share` is the raw share string (0..SHARE_BASE). `onShareChange` receives
-// the new raw share string. When `projectedBalance` is provided, the info
-// line also shows the approximate GRAM value of the share.
+// the new raw share string. `subject` is the banner noun shown after the
+// percentage (e.g. "round profit" or "projected balance"). When
+// `projectedBalance` is provided, the info line also shows the approximate
+// GRAM value of the share.
 export function ShareInput({
   share,
   onShareChange,
@@ -19,6 +21,7 @@ export function ShareInput({
   label,
   error,
   onClearError,
+  subject,
   projectedBalance,
 }: {
   share: string;
@@ -30,6 +33,7 @@ export function ShareInput({
   label: string;
   error?: string;
   onClearError: () => void;
+  subject: string;
   projectedBalance?: bigint;
 }) {
   return (
@@ -78,7 +82,7 @@ export function ShareInput({
             : undefined;
         return (
           <p className="text-muted-foreground text-[12px]">
-            {shareToPercent(rawShare)}% of projected balance
+            {shareToPercent(rawShare)}% of {subject}
             {' · '}
             <span className="font-mono">
               share {rawShare.toString()} / {SHARE_BASE.toString()}

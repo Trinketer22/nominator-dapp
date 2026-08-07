@@ -976,6 +976,7 @@ export function PoolOpsPanel({ poolAddress }: { poolAddress: string }) {
                 percentInput={addValPercentInput}
                 onPercentInputChange={setAddValPercentInput}
                 label="Max share"
+                subject="projected balance"
                 error={fieldErrors.addValLimitShareMax}
                 onClearError={() => clearErr('addValLimitShareMax')}
                 projectedBalance={projectedBalance}
@@ -1326,6 +1327,7 @@ export function PoolOpsPanel({ poolAddress }: { poolAddress: string }) {
                 percentInput={limitPercentInput}
                 onPercentInputChange={setLimitPercentInput}
                 label="Max share"
+                subject="projected balance"
                 error={fieldErrors.limitShareMax}
                 onClearError={() => clearErr('limitShareMax')}
                 projectedBalance={projectedBalance}

@@ -391,6 +391,7 @@ export function DeployInitPanel({
             percentInput={ownerSharePercent}
             onPercentInputChange={setOwnerSharePercent}
             label="Owner share"
+            subject="round profit"
             error={fieldErrors.ownerShare}
             onClearError={() => clearErr('ownerShare')}
           />
