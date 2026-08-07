@@ -112,6 +112,10 @@ export function validateNumberInput(
     setErr(fieldId, 'Enter a valid number.');
     return null;
   }
+  if (!Number.isInteger(v)) {
+    setErr(fieldId, 'Enter a whole number.');
+    return null;
+  }
   clearErr(fieldId);
   return v;
 }

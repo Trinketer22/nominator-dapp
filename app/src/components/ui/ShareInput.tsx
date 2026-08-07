@@ -1,5 +1,10 @@
 import { fromNano } from '@ton/core';
-import { SHARE_BASE, shareToPercent, percentToShare } from '@/lib/pool';
+import {
+  SHARE_BASE,
+  shareToPercent,
+  percentToShare,
+  parseBigInt,
+} from '@/lib/pool';
 import { Field } from './form';
 
 // Reusable share input with a percent/raw toggle and an info line showing the
@@ -47,7 +52,7 @@ export function ShareInput({
           onChange={(e) => {
             const next = e.target.value as 'percent' | 'share';
             if (next === 'percent') {
-              onPercentInputChange(shareToPercent(BigInt(share || '0')));
+              onPercentInputChange(shareToPercent(parseBigInt(share) ?? 0n));
             }
             onModeChange(next);
           }}
@@ -75,7 +80,7 @@ export function ShareInput({
         error={error}
       />
       {(() => {
-        const rawShare = BigInt(share || '0');
+        const rawShare = parseBigInt(share) ?? 0n;
         const approx =
           projectedBalance !== undefined
             ? (rawShare * projectedBalance) / SHARE_BASE
