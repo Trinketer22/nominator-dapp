@@ -197,7 +197,7 @@ export function DeployInitPanel({
       );
       if (ms === null) return;
       if (ms < 0n || ms > SHARE_BASE) {
-        setErr('limitShareMax', `maxShare must be in 0..${SHARE_BASE}.`);
+        setErr('limitShareMax', `Max share must be in 0..${SHARE_BASE}.`);
         return;
       }
       limit = makeLimitShare(ms);
@@ -220,8 +220,7 @@ export function DeployInitPanel({
       ...initParams,
     });
     if (verr) {
-      const field = verr.slice(0, verr.indexOf(' '));
-      setErr(field || 'mainValidator', verr);
+      setErr(verr.field, verr.message);
       return;
     }
     clearAllErr();

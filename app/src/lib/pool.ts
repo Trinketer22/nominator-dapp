@@ -368,15 +368,27 @@ export async function getPoolOwner(
   return opened.getOwner();
 }
 
-export function validateInitParams(p: PoolInitParams): string | null {
+export function validateInitParams(
+  p: PoolInitParams,
+): { field: string; message: string } | null {
   if (p.ownerShare < 0n || p.ownerShare > SHARE_BASE) {
-    return `ownerShare must be in 0..${SHARE_BASE}`;
+    return {
+      field: 'ownerShare',
+      message: `Owner share must be in 0..${SHARE_BASE}.`,
+    };
   }
   if (p.maxTonPerValidator <= p.minTonPerValidator) {
-    return 'maxTonPerValidator must be > minTonPerValidator';
+    return {
+      field: 'maxTonPerValidator',
+      message:
+        'Max GRAM per validator must be greater than min GRAM per validator.',
+    };
   }
   if (p.maxNominators < 0 || p.maxNominators > 1023) {
-    return 'maxNominators must be in 0..1023';
+    return {
+      field: 'maxNominators',
+      message: 'Max nominators must be in 0..1023.',
+    };
   }
   // Address.parse throws on invalid input; guard with a try/catch so this
   // function returns an error string instead of throwing into the caller
@@ -385,10 +397,16 @@ export function validateInitParams(p: PoolInitParams): string | null {
   try {
     mainValidatorAddr = Address.parse(p.mainValidator);
   } catch {
-    return 'mainValidator is not a valid address';
+    return {
+      field: 'mainValidator',
+      message: 'Main validator address is not valid.',
+    };
   }
   if (!Address.isAddress(mainValidatorAddr)) {
-    return 'mainValidator is not a valid address';
+    return {
+      field: 'mainValidator',
+      message: 'Main validator address is not valid.',
+    };
   }
   return null;
 }

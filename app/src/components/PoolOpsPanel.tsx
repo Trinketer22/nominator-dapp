@@ -572,7 +572,7 @@ export function PoolOpsPanel({ poolAddress }: { poolAddress: string }) {
       );
       if (ms === null) return;
       if (ms < 0n || ms > SHARE_BASE) {
-        setErr('addValLimitShareMax', `maxShare must be in 0..${SHARE_BASE}.`);
+        setErr('addValLimitShareMax', `Max share must be in 0..${SHARE_BASE}.`);
         return;
       }
       limit = makeLimitShare(ms);
@@ -764,7 +764,7 @@ export function PoolOpsPanel({ poolAddress }: { poolAddress: string }) {
     }
     if (limit.$ === 'ValidatorLimitShare') {
       if (limit.maxShare < 0n || limit.maxShare > SHARE_BASE) {
-        setErr('limitShareMax', `maxShare must be in 0..${SHARE_BASE}.`);
+        setErr('limitShareMax', `Max share must be in 0..${SHARE_BASE}.`);
         return;
       }
     } else {
