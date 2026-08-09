@@ -34,6 +34,8 @@ Built with React, Vite, Tailwind CSS, and TonConnect for wallet interaction.
 
 ## Quick start
 
+Copy `.env.example` to `.env` and fill in Toncenter API keys for read access.
+
 ```bash
 npm ci          # install deps
 npm run dev     # start dev server (http://localhost:5173)
@@ -43,10 +45,9 @@ For production:
 
 ```bash
 npm run build   # build to dist/
-npm run preview # serve the build locally
 ```
 
-Copy `.env.example` to `.env` and fill in Toncenter API keys for read access.
+Then host dist static files on github pages or any other static hosting.
 
 ## Network selection
 
