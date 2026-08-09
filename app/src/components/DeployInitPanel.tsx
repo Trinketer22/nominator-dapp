@@ -496,6 +496,7 @@ export function DeployInitPanel({
           type="number"
           value={refundBonus}
           onChange={withClear(setRefundBonus, 'refundBonus')}
+          error={fieldErrors.refundBonus}
         />
         <div className="grid grid-cols-2 gap-3">
           <Field
@@ -503,6 +504,7 @@ export function DeployInitPanel({
             type="number"
             value={minStake}
             onChange={withClear(setMinStake, 'minStake')}
+            error={fieldErrors.minStake}
           />
           <Field
             label="Min withdrawable rewards (GRAM)"
@@ -512,6 +514,7 @@ export function DeployInitPanel({
               setMinWithdrawableRewards,
               'minWithdrawableRewards',
             )}
+            error={fieldErrors.minWithdrawableRewards}
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -520,6 +523,7 @@ export function DeployInitPanel({
             type="number"
             value={initValue}
             onChange={withClear(setInitValue, 'initValue')}
+            error={fieldErrors.initValue}
           />
         </div>
         {computedAddr && (

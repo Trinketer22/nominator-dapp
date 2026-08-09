@@ -902,6 +902,7 @@ export function PoolOpsPanel({ poolAddress }: { poolAddress: string }) {
               type="number"
               value={addValMsgValue}
               onChange={withClear(setAddValMsgValue, 'addValMsgValue')}
+              error={fieldErrors.addValMsgValue}
             />
             <Button onClick={onAddValidator} disabled={busy || !isOwner}>
               Add validator{!isOwner && ' (not owner)'}
@@ -1039,6 +1040,7 @@ export function PoolOpsPanel({ poolAddress }: { poolAddress: string }) {
               type="number"
               value={withdrawAmount}
               onChange={withClear(setWithdrawAmount, 'withdrawAmount')}
+              error={fieldErrors.withdrawAmount}
             />
             <Field
               label="Message value (GRAM)"
@@ -1087,12 +1089,14 @@ export function PoolOpsPanel({ poolAddress }: { poolAddress: string }) {
               type="number"
               value={gRefundBonus}
               onChange={withClear(setGRefundBonus, 'gRefundBonus')}
+              error={fieldErrors.gRefundBonus}
             />
             <Field
               label="Message value (GRAM)"
               type="number"
               value={msgValue}
               onChange={withClear(setMsgValue, 'msgValue')}
+              error={fieldErrors.msgValue}
             />
             <Button
               onClick={onUpdateValidatorLimits}
@@ -1121,6 +1125,7 @@ export function PoolOpsPanel({ poolAddress }: { poolAddress: string }) {
                 type="number"
                 value={minStake}
                 onChange={withClear(setMinStake, 'minStake')}
+                error={fieldErrors.minStake}
               />
             </div>
             <Field
@@ -1128,6 +1133,7 @@ export function PoolOpsPanel({ poolAddress }: { poolAddress: string }) {
               type="number"
               value={msgValue}
               onChange={withClear(setMsgValue, 'msgValue')}
+              error={fieldErrors.msgValue}
             />
             <Button
               onClick={onUpdateNominatorLimits}
@@ -1225,6 +1231,7 @@ export function PoolOpsPanel({ poolAddress }: { poolAddress: string }) {
               type="number"
               value={msgValue}
               onChange={withClear(setMsgValue, 'msgValue')}
+              error={fieldErrors.msgValue}
             />
             <Button
               onClick={onUpdateValidatorLimit}
@@ -1488,6 +1495,7 @@ export function PoolOpsPanel({ poolAddress }: { poolAddress: string }) {
               type="number"
               value={msgValue}
               onChange={withClear(setMsgValue, 'msgValue')}
+              error={fieldErrors.msgValue}
             />
             <Button onClick={onUpdateWhitelist} disabled={busy || !isOwner}>
               {wlEntries.length === 0 ? 'Clear whitelist' : 'Update whitelist'}
