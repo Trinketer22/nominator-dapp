@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fromNano } from '@ton/core';
 import {
@@ -47,6 +47,25 @@ export function DeployInitPanel({
     () => (tc && wallet && tc.account ? makeSender(tc, network) : null),
     [tc, network, wallet],
   );
+
+  const { data: networkLimits } = useQuery({
+    queryKey: ['network-staking-limits', network],
+    queryFn: () => getNetworkStakingLimits(network),
+  });
+  const networkMinStake = networkLimits?.minStake;
+  const networkMaxStake = networkLimits?.maxStake;
+
+  // Default the global validator range to the network staking range (config
+  // param 17) once it loads, so the form opens with values the contract will
+  // accept instead of hardcoded placeholders. The deps are primitive bigints,
+  // so this only re-fires when the actual limits change (e.g. on network
+  // switch) — edits made after the values first load are preserved across
+  // refetches.
+  useEffect(() => {
+    if (!networkMinStake || !networkMaxStake) return;
+    setMinTonPerValidator(fromNano(networkMinStake));
+    setMaxTonPerValidator(fromNano(networkMaxStake));
+  }, [networkMinStake, networkMaxStake]);
 
   // deploy params
   const [poolId, setPoolId] = useState('0');
@@ -130,20 +149,6 @@ export function DeployInitPanel({
     queryFn: () => isContractDeployed(network, computedAddr),
     staleTime: Infinity,
   });
-
-  // Fetch the network staking limits (config param 17) so the main validator's
-  // GRAM limit and the pool's global limits can be validated against them —
-  // the contract asserts minTon >= network min and maxTon <= network max
-  // (ErrorsPool.MinStakeBelowNetworkLimit / MaxStakeAboveNetworkLimit). These
-  // differ between testnet and mainnet. Mirrors the PoolOpsPanel query so the
-  // init form behaves consistently with Add Validator / Individual Validator
-  // Limit.
-  const { data: networkLimits } = useQuery({
-    queryKey: ['network-staking-limits', network],
-    queryFn: () => getNetworkStakingLimits(network),
-  });
-  const networkMinStake = networkLimits?.minStake;
-  const networkMaxStake = networkLimits?.maxStake;
 
   async function onDeployAndInit() {
     if (!sender) {
