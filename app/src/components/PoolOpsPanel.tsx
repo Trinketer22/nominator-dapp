@@ -904,7 +904,10 @@ export function PoolOpsPanel({ poolAddress }: { poolAddress: string }) {
               onChange={withClear(setAddValMsgValue, 'addValMsgValue')}
               error={fieldErrors.addValMsgValue}
             />
-            <Button onClick={onAddValidator} disabled={busy || !isOwner}>
+            <Button
+              onClick={onAddValidator}
+              disabled={busy || !isOwner || !validatorAddr}
+            >
               Add validator{!isOwner && ' (not owner)'}
             </Button>
           </>
@@ -1235,7 +1238,7 @@ export function PoolOpsPanel({ poolAddress }: { poolAddress: string }) {
             />
             <Button
               onClick={onUpdateValidatorLimit}
-              disabled={busy || !isOwner}
+              disabled={busy || !isOwner || !validatorAddr}
             >
               Update limit{!isOwner && ' (not owner)'}
             </Button>
