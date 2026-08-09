@@ -407,6 +407,7 @@ export function DeployInitPanel({
           value={poolId}
           onChange={withClear(setPoolId, 'poolId')}
           placeholder="0"
+          error={fieldErrors.poolId}
         />
         {alreadyDeployed && (
           <div className="rounded-md border border-warning/50 bg-warning/10 p-3 text-[13px] text-warning">
