@@ -23,6 +23,7 @@ import {
   getNetworkStakingLimits,
   getOwnerShareInfo,
   getPoolInvariants,
+  getNominatorMinimalStake,
   getPoolOwner,
   getValidatorInfo,
   getValidators,
@@ -224,11 +225,43 @@ export function PoolOpsPanel({ poolAddress }: { poolAddress: string }) {
   const networkMaxStake = networkLimits?.maxStake;
 
   // Fetch the pool's validators for the picker in the per-validator limit tab.
-  const { data: validators } = useQuery({
+  // getValidators already calls get_pool_data internally, so it also returns
+  // the pool's current maxNominators — reused below to populate the Update
+  // nominator limits form instead of issuing a separate get_pool_data call.
+  const { data: validatorsData } = useQuery({
     queryKey: ['pool-validators', network, poolAddress],
     enabled: !!poolAddress,
     queryFn: () => getValidators(network, poolAddress),
   });
+  // getValidators now returns { validators, maxNominators }; keep a local
+  // `validators` array so all existing per-validator usages keep working, and
+  // surface maxNominators separately to populate the nominator limits form.
+  const validators = validatorsData?.validators;
+  const poolMaxNominators = validatorsData?.maxNominators;
+
+  // Fetch the pool's current nominator min stake so the Update nominator
+  // limits form can show the on-chain value. maxNominators is reused from the
+  // validators query above (same get_pool_data call); min stake comes from a
+  // dedicated getter that nothing else in this panel fetches.
+  const { data: nominatorMinStake } = useQuery({
+    queryKey: ['pool-nominator-min-stake', network, poolAddress],
+    enabled: !!poolAddress,
+    queryFn: () => getNominatorMinimalStake(network, poolAddress),
+  });
+
+  // Populate the nominator limits form with the pool's current values when
+  // they're first loaded, so the user sees what's on-chain rather than
+  // hardcoded placeholders.
+  useEffect(() => {
+    if (poolMaxNominators !== undefined) {
+      setMaxNominators(poolMaxNominators.toString());
+    }
+  }, [poolMaxNominators]);
+  useEffect(() => {
+    if (nominatorMinStake) {
+      setMinStake(fromNano(nominatorMinStake.minStake));
+    }
+  }, [nominatorMinStake]);
 
   // Fetch detailed validator info (rotation data) for the recover-stake tab.
   // get_validator_info may advance round state, so it's only called when the

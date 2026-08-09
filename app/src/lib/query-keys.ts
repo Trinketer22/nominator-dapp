@@ -6,6 +6,8 @@ export const poolQueryKeys = {
     ['pool-info', network, poolAddress] as const,
   limits: (network: string, poolAddress: string) =>
     ['pool-limits', network, poolAddress] as const,
+  nominatorMinStake: (network: string, poolAddress: string) =>
+    ['pool-nominator-min-stake', network, poolAddress] as const,
   validators: (network: string, poolAddress: string) =>
     ['pool-validators', network, poolAddress] as const,
   networkStakingLimits: (network: string) =>
@@ -30,6 +32,9 @@ export function invalidatePoolQueries(
   });
   queryClient.invalidateQueries({
     queryKey: ['pool-limits', network, poolAddress],
+  });
+  queryClient.invalidateQueries({
+    queryKey: ['pool-nominator-min-stake', network, poolAddress],
   });
   queryClient.invalidateQueries({
     queryKey: ['pool-validators', network, poolAddress],

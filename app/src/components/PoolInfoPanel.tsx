@@ -68,11 +68,14 @@ export function PoolInfoPanel({ poolAddress }: { poolAddress: string }) {
   });
 
   // Shared validator list query (same key as PoolOpsPanel so it's cached).
-  const { data: validators } = useQuery({
+  // getValidators returns { validators, maxNominators }; this panel only needs
+  // the array (maxNominators comes from the pool-info query below).
+  const { data: validatorsData } = useQuery({
     queryKey: ['pool-validators', network, poolAddress],
     enabled: !!poolAddress,
     queryFn: () => getValidators(network, poolAddress),
   });
+  const validators = validatorsData?.validators;
 
   const selectedVal = validators?.find((v) => v.address === selectedValidator);
 

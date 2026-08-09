@@ -626,11 +626,14 @@ export interface ValidatorEntry {
 
 // Returns the list of validators in the pool: the main validator first, then
 // any extra validators from the validators map. Matches the picker in
-// pool-utils.tolk's collectValidatorOptions (includeMain = true).
+// pool-utils.tolk's collectValidatorOptions (includeMain = true). Also
+// surfaces the pool's current maxNominators from the same get_pool_data call,
+// so callers (e.g. the Update nominator limits form) can read it without a
+// separate fetch.
 export async function getValidators(
   network: Network,
   poolAddress: string,
-): Promise<ValidatorEntry[]> {
+): Promise<{ validators: ValidatorEntry[]; maxNominators: bigint }> {
   const data = await getPoolData(network, poolAddress);
   const vd = data.validators.ref;
   const result: ValidatorEntry[] = [];
@@ -661,7 +664,7 @@ export async function getValidators(
     });
   }
 
-  return result;
+  return { validators: result, maxNominators: data.maxNominators };
 }
 
 // Returns the current nominator whitelist addresses from the pool's nominators
