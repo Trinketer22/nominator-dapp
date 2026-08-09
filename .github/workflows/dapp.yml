@@ -25,9 +25,6 @@ jobs:
     permissions:
       contents: read
 
-    environment:
-      name: github-pages
-
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -53,9 +50,9 @@ jobs:
         run: npm run typecheck
 
       - name: Build
-
+        # Construct the GitHub Pages origin on the fly
         env:
-          VITE_DEPLOY_ORIGIN: ${{ vars.VITE_DEPLOY_ORIGIN }}
+          VITE_DEPLOY_ORIGIN: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
 
         run: npm run build
 
