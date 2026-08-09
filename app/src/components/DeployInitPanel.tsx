@@ -20,6 +20,7 @@ import { tonscanTxUrl, formatAddressForNetwork } from '@/lib/ton';
 import {
   deployAndInitPool,
   getNetworkStakingLimits,
+  isContractDeployed,
   makeLimitShare,
   makeLimitTon,
   makeSender,
@@ -116,6 +117,19 @@ export function DeployInitPanel({
       return '';
     }
   }, [owner, poolId, network]);
+
+  // Check whether a pool is already deployed at the computed address (derived
+  // from owner + poolId). Deploying into an occupied address bounces on-chain,
+  // so surface it as a warning under the Pool ID input as the user types.
+  // staleTime: Infinity keeps the result cached per address — deployment state
+  // only flips one way (absent -> present), and the user retries with a new
+  // poolId, which yields a new query key.
+  const { data: alreadyDeployed } = useQuery({
+    queryKey: ['pool-deployed', network, computedAddr],
+    enabled: !!computedAddr,
+    queryFn: () => isContractDeployed(network, computedAddr),
+    staleTime: Infinity,
+  });
 
   // Fetch the network staking limits (config param 17) so the main validator's
   // GRAM limit and the pool's global limits can be validated against them —
@@ -389,6 +403,11 @@ export function DeployInitPanel({
           onChange={withClear(setPoolId, 'poolId')}
           placeholder="0"
         />
+        {alreadyDeployed && (
+          <div className="rounded-md border border-warning/50 bg-warning/10 p-3 text-[13px] text-warning">
+            A pool is already deployed at the computed address for this pool ID.
+          </div>
+        )}
         <Field
           label="Main validator address"
           value={mainValidator}
@@ -506,7 +525,10 @@ export function DeployInitPanel({
             <AddrLink addr={computedAddr} network={network} />
           </div>
         )}
-        <Button onClick={onDeployAndInit} disabled={busy || !mainValidator}>
+        <Button
+          onClick={onDeployAndInit}
+          disabled={busy || !mainValidator || alreadyDeployed}
+        >
           {busy ? 'Working...' : 'Deploy & Initialize'}
         </Button>
       </section>
