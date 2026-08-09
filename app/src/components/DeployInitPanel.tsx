@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { fromNano } from '@ton/core';
 import {
   useIsConnectionRestored,
   useTonAddress,
@@ -8,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Field, AddrLink } from '@/components/ui/form';
 import { ShareInput } from '@/components/ui/ShareInput';
+import { ValidatorLimitInput } from '@/components/ui/ValidatorLimitInput';
 import { RoundAllowanceSelect } from '@/components/ui/RoundAllowanceSelect';
 import { useToast } from '@/components/ui/toast';
 import { useRouter } from '@/lib/router';
@@ -16,15 +19,18 @@ import { getWalletBaselineLt, waitForInitResult } from '@/lib/refund';
 import { tonscanTxUrl, formatAddressForNetwork } from '@/lib/ton';
 import {
   deployAndInitPool,
+  getNetworkStakingLimits,
   makeLimitShare,
   makeLimitTon,
   makeSender,
   poolAddress,
   SHARE_BASE,
   validateBigIntInput,
+  validateGlobalGramLimits,
   validateGramInput,
   validateInitParams,
   validateNumberInput,
+  validateValidatorGramLimit,
 } from '@/lib/pool';
 
 export function DeployInitPanel({
@@ -66,6 +72,10 @@ export function DeployInitPanel({
   );
   const [limitTonMax, setLimitTonMax] = useState('1000000');
   const [limitShareMax, setLimitShareMax] = useState('8388608');
+  const [limitShareMode, setLimitShareMode] = useState<'percent' | 'share'>(
+    'percent',
+  );
+  const [limitPercentInput, setLimitPercentInput] = useState('50.00');
 
   const [busy, setBusy] = useState(false);
 
@@ -107,6 +117,20 @@ export function DeployInitPanel({
     }
   }, [owner, poolId, network]);
 
+  // Fetch the network staking limits (config param 17) so the main validator's
+  // GRAM limit and the pool's global limits can be validated against them —
+  // the contract asserts minTon >= network min and maxTon <= network max
+  // (ErrorsPool.MinStakeBelowNetworkLimit / MaxStakeAboveNetworkLimit). These
+  // differ between testnet and mainnet. Mirrors the PoolOpsPanel query so the
+  // init form behaves consistently with Add Validator / Individual Validator
+  // Limit.
+  const { data: networkLimits } = useQuery({
+    queryKey: ['network-staking-limits', network],
+    queryFn: () => getNetworkStakingLimits(network),
+  });
+  const networkMinStake = networkLimits?.minStake;
+  const networkMaxStake = networkLimits?.maxStake;
+
   async function onDeployAndInit() {
     if (!sender) {
       toast.error('Connect your wallet first.');
@@ -141,6 +165,23 @@ export function DeployInitPanel({
       clearErr,
     );
     if (minTonPerValidatorVal === null) return;
+    // Validate the pool's global validator range against the network staking
+    // range (same check the Update global validator limits tab performs) so an
+    // out-of-range init bounces here with an inline error instead of on-chain,
+    // and so the main validator's individual limit below can be checked against
+    // a range that is already known to be valid.
+    const gerr = validateGlobalGramLimits(
+      minTonPerValidatorVal,
+      maxTonPerValidatorVal,
+      { minStake: networkMinStake, maxStake: networkMaxStake },
+    );
+    if (gerr) {
+      setErr(
+        gerr.field === 'min' ? 'minTonPerValidator' : 'maxTonPerValidator',
+        gerr.msg,
+      );
+      return;
+    }
     const refundBonusVal = validateGramInput(
       refundBonus,
       'refundBonus',
@@ -187,6 +228,20 @@ export function DeployInitPanel({
         clearErr,
       );
       if (maxTon === null) return;
+      // At init the pool's global range is being set in this same form, so
+      // validate the individual limit against it plus the network range — the
+      // same checks Add Validator and Individual Validator Limit perform
+      // (IndividualLimitIsBelowGlobal / ...AboveGlobal and the network bounds).
+      const err = validateValidatorGramLimit(maxTon, 'Main validator limit', {
+        globalMinTon: minTonPerValidatorVal,
+        globalMaxTon: maxTonPerValidatorVal,
+        networkMinStake,
+        networkMaxStake,
+      });
+      if (err) {
+        setErr('limitTonMax', err);
+        return;
+      }
       limit = makeLimitTon(maxTon);
     } else if (limitType === 'share') {
       const ms = validateBigIntInput(
@@ -345,42 +400,28 @@ export function DeployInitPanel({
           value={roundAllowance}
           onChange={setRoundAllowance}
         />
-        <label className="flex flex-col gap-1 text-left">
-          <span className="text-muted-foreground text-[12px]">
-            Main validator limit
-          </span>
-          <select
-            value={limitType}
-            onChange={(e) => {
-              setLimitType(e.target.value as 'global' | 'ton' | 'share');
-              clearErr('limitTonMax');
-              clearErr('limitShareMax');
-            }}
-            className="h-9 rounded-md border border-input bg-background px-3 text-[13px]"
-          >
-            <option value="global">Global (use pool limits)</option>
-            <option value="ton">GRAM max</option>
-            <option value="share">Share max</option>
-          </select>
-        </label>
-        {limitType === 'ton' && (
-          <Field
-            label="Max GRAM for main validator"
-            type="number"
-            value={limitTonMax}
-            onChange={withClear(setLimitTonMax, 'limitTonMax')}
-            error={fieldErrors.limitTonMax}
-          />
-        )}
-        {limitType === 'share' && (
-          <Field
-            label={`Max share for main validator (0..${SHARE_BASE})`}
-            type="number"
-            value={limitShareMax}
-            onChange={withClear(setLimitShareMax, 'limitShareMax')}
-            error={fieldErrors.limitShareMax}
-          />
-        )}
+        <ValidatorLimitInput
+          allowGlobal
+          type={limitType}
+          onTypeChange={setLimitType}
+          tonMax={limitTonMax}
+          onTonMaxChange={setLimitTonMax}
+          shareMax={limitShareMax}
+          onShareMaxChange={setLimitShareMax}
+          shareMode={limitShareMode}
+          onShareModeChange={setLimitShareMode}
+          percentInput={limitPercentInput}
+          onPercentInputChange={setLimitPercentInput}
+          networkMinStake={networkMinStake}
+          networkMaxStake={networkMaxStake}
+          errorTon={fieldErrors.limitTonMax}
+          errorShare={fieldErrors.limitShareMax}
+          onClearError={() => {
+            clearErr('limitTonMax');
+            clearErr('limitShareMax');
+          }}
+          typeLabel="Main validator limit"
+        />
         <div className="grid grid-cols-2 gap-3 items-start">
           <ShareInput
             share={ownerShare}
@@ -402,6 +443,14 @@ export function DeployInitPanel({
             error={fieldErrors.maxNominators}
           />
         </div>
+        {networkMinStake && networkMaxStake && (
+          <p className="text-muted-foreground text-[12px]">
+            Network range:{' '}
+            <span className="font-mono">
+              {fromNano(networkMinStake)} – {fromNano(networkMaxStake)} GRAM
+            </span>
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <Field
             label="Max GRAM / validator"
@@ -415,6 +464,7 @@ export function DeployInitPanel({
             type="number"
             value={minTonPerValidator}
             onChange={withClear(setMinTonPerValidator, 'minTonPerValidator')}
+            error={fieldErrors.minTonPerValidator}
           />
         </div>
         <Field

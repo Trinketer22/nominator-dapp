@@ -8,7 +8,7 @@ import {
 
 import { Button } from '@/components/ui/button';
 import { Field, AddrLink } from '@/components/ui/form';
-import { ShareInput } from '@/components/ui/ShareInput';
+import { ValidatorLimitInput } from '@/components/ui/ValidatorLimitInput';
 import { RoundAllowanceSelect } from '@/components/ui/RoundAllowanceSelect';
 import { useToast } from '@/components/ui/toast';
 import { useRouter } from '@/lib/router';
@@ -41,8 +41,10 @@ import {
   updateValidatorLimits,
   updateVset,
   validateBigIntInput,
+  validateGlobalGramLimits,
   validateGramInput,
   validateNumberInput,
+  validateValidatorGramLimit,
 } from '@/lib/pool';
 import { Address, fromNano } from '@ton/core';
 
@@ -332,52 +334,6 @@ export function PoolOpsPanel({ poolAddress }: { poolAddress: string }) {
     poolOwner.equals(Address.parse(wallet))
   );
 
-  // Validate a per-validator GRAM limit against the pool's global range and the
-  // network staking range. Returns an error message or null if valid.
-  function validateTonLimit(maxTon: bigint, context: string): string | null {
-    if (globalMinTon && maxTon < globalMinTon) {
-      return `${context}: max GRAM (${fromNano(maxTon)}) is below the pool minimum (${fromNano(globalMinTon)}).`;
-    }
-    if (globalMaxTon && maxTon > globalMaxTon) {
-      return `${context}: max GRAM (${fromNano(maxTon)}) is above the pool maximum (${fromNano(globalMaxTon)}).`;
-    }
-    if (networkMinStake && maxTon < networkMinStake) {
-      return `${context}: max GRAM (${fromNano(maxTon)}) is below the network minimum (${fromNano(networkMinStake)}).`;
-    }
-    if (networkMaxStake && maxTon > networkMaxStake) {
-      return `${context}: max GRAM (${fromNano(maxTon)}) is above the network maximum (${fromNano(networkMaxStake)}).`;
-    }
-    return null;
-  }
-
-  // Validate global pool limits against the network staking range. Returns
-  // the error keyed to the field it belongs to so the inline message renders
-  // under the correct input rather than always under Max.
-  function validateGlobalLimits(
-    min: bigint,
-    max: bigint,
-  ): { field: 'gMinTon' | 'gMaxTon'; msg: string } | null {
-    if (max <= min) {
-      return {
-        field: 'gMaxTon',
-        msg: 'Max GRAM/validator must be > min GRAM/validator.',
-      };
-    }
-    if (networkMinStake && min < networkMinStake) {
-      return {
-        field: 'gMinTon',
-        msg: `Min GRAM/validator (${fromNano(min)}) is below the network minimum (${fromNano(networkMinStake)}).`,
-      };
-    }
-    if (networkMaxStake && max > networkMaxStake) {
-      return {
-        field: 'gMaxTon',
-        msg: `Max GRAM/validator (${fromNano(max)}) is above the network maximum (${fromNano(networkMaxStake)}).`,
-      };
-    }
-    return null;
-  }
-
   // Runs an operation. Owner-only operations (everything except Add Funds) are
   // gated on requireOwner and wait for the pool's RefundMessage reply, decoding
   // the errorCode into a human-readable report. Add Funds just tops up the
@@ -557,7 +513,12 @@ export function PoolOpsPanel({ poolAddress }: { poolAddress: string }) {
         clearErr,
       );
       if (maxTon === null) return;
-      const err = validateTonLimit(maxTon, 'Add validator');
+      const err = validateValidatorGramLimit(maxTon, 'Add validator', {
+        globalMinTon,
+        globalMaxTon,
+        networkMinStake,
+        networkMaxStake,
+      });
       if (err) {
         setErr('addValLimitTonMax', err);
         return;
@@ -686,9 +647,12 @@ export function PoolOpsPanel({ poolAddress }: { poolAddress: string }) {
     if (min === null) return;
     const max = validateGramInput(gMaxTon, 'gMaxTon', setErr, clearErr);
     if (max === null) return;
-    const err = validateGlobalLimits(min, max);
+    const err = validateGlobalGramLimits(min, max, {
+      minStake: networkMinStake,
+      maxStake: networkMaxStake,
+    });
     if (err) {
-      setErr(err.field, err.msg);
+      setErr(err.field === 'min' ? 'gMinTon' : 'gMaxTon', err.msg);
       return;
     }
     const refundBonus = validateGramInput(
@@ -768,7 +732,11 @@ export function PoolOpsPanel({ poolAddress }: { poolAddress: string }) {
         return;
       }
     } else {
-      const err = validateTonLimit(limit.maxTon, 'Update per-validator limit');
+      const err = validateValidatorGramLimit(
+        limit.maxTon,
+        'Update per-validator limit',
+        { globalMinTon, globalMaxTon, networkMinStake, networkMaxStake },
+      );
       if (err) {
         setErr('limitTonMax', err);
         return;
@@ -905,83 +873,30 @@ export function PoolOpsPanel({ poolAddress }: { poolAddress: string }) {
                 clearErr('roundAllowance');
               }}
             />
-            <label className="flex flex-col gap-1 text-left">
-              <span className="text-muted-foreground text-[12px]">
-                Per-validator limit
-              </span>
-              <select
-                value={addValLimitType}
-                onChange={(e) =>
-                  setAddValLimitType(
-                    e.target.value as 'global' | 'ton' | 'share',
-                  )
-                }
-                className="h-9 rounded-md border border-input bg-background px-3 text-[13px]"
-              >
-                <option value="global">Global (use pool limits)</option>
-                <option value="ton">GRAM max</option>
-                <option value="share">Share max</option>
-              </select>
-            </label>
-            {addValLimitType === 'global' && globalMinTon && globalMaxTon && (
-              <p className="text-muted-foreground text-[12px]">
-                Validator will use the pool's global range:{' '}
-                <span className="font-mono">
-                  {fromNano(globalMinTon)} – {fromNano(globalMaxTon)} GRAM
-                </span>
-              </p>
-            )}
-            {addValLimitType === 'ton' && (
-              <>
-                <Field
-                  label={
-                    globalMinTon && globalMaxTon
-                      ? `Max GRAM (pool range: ${fromNano(globalMinTon)} – ${fromNano(globalMaxTon)})`
-                      : 'Max GRAM'
-                  }
-                  type="number"
-                  value={addValLimitTonMax}
-                  onChange={withClear(
-                    setAddValLimitTonMax,
-                    'addValLimitTonMax',
-                  )}
-                  error={fieldErrors.addValLimitTonMax}
-                />
-                {globalMinTon && globalMaxTon && (
-                  <p className="text-muted-foreground text-[12px]">
-                    Pool range:{' '}
-                    <span className="font-mono">
-                      {fromNano(globalMinTon)} – {fromNano(globalMaxTon)} GRAM
-                    </span>
-                    {networkMinStake && networkMaxStake && (
-                      <>
-                        {' · '}
-                        Network:{' '}
-                        <span className="font-mono">
-                          {fromNano(networkMinStake)} –{' '}
-                          {fromNano(networkMaxStake)} GRAM
-                        </span>
-                      </>
-                    )}
-                  </p>
-                )}
-              </>
-            )}
-            {addValLimitType === 'share' && (
-              <ShareInput
-                share={addValLimitShareMax}
-                onShareChange={setAddValLimitShareMax}
-                mode={addValShareMode}
-                onModeChange={setAddValShareMode}
-                percentInput={addValPercentInput}
-                onPercentInputChange={setAddValPercentInput}
-                label="Max share"
-                subject="projected balance"
-                error={fieldErrors.addValLimitShareMax}
-                onClearError={() => clearErr('addValLimitShareMax')}
-                projectedBalance={projectedBalance}
-              />
-            )}
+            <ValidatorLimitInput
+              allowGlobal
+              type={addValLimitType}
+              onTypeChange={setAddValLimitType}
+              tonMax={addValLimitTonMax}
+              onTonMaxChange={setAddValLimitTonMax}
+              shareMax={addValLimitShareMax}
+              onShareMaxChange={setAddValLimitShareMax}
+              shareMode={addValShareMode}
+              onShareModeChange={setAddValShareMode}
+              percentInput={addValPercentInput}
+              onPercentInputChange={setAddValPercentInput}
+              globalMinTon={globalMinTon}
+              globalMaxTon={globalMaxTon}
+              networkMinStake={networkMinStake}
+              networkMaxStake={networkMaxStake}
+              projectedBalance={projectedBalance}
+              errorTon={fieldErrors.addValLimitTonMax}
+              errorShare={fieldErrors.addValLimitShareMax}
+              onClearError={() => {
+                clearErr('addValLimitTonMax');
+                clearErr('addValLimitShareMax');
+              }}
+            />
             <Field
               label="Message value (GRAM)"
               type="number"
@@ -1280,59 +1195,31 @@ export function PoolOpsPanel({ poolAddress }: { poolAddress: string }) {
                 })()}
               </p>
             )}
-            <label className="flex flex-col gap-1 text-left">
-              <span className="text-muted-foreground text-[12px]">
-                Limit type
-              </span>
-              <select
-                value={limitType}
-                onChange={(e) =>
-                  setLimitType(e.target.value as 'ton' | 'share')
-                }
-                className="h-9 rounded-md border border-input bg-background px-3 text-[13px]"
-              >
-                <option value="ton">GRAM max</option>
-                <option value="share">Share max</option>
-              </select>
-            </label>
-            {limitType === 'ton' ? (
-              <>
-                <Field
-                  label={
-                    globalMinTon && globalMaxTon
-                      ? `Max GRAM (pool range: ${fromNano(globalMinTon)} – ${fromNano(globalMaxTon)})`
-                      : 'Max GRAM'
-                  }
-                  type="number"
-                  value={limitTonMax}
-                  onChange={withClear(setLimitTonMax, 'limitTonMax')}
-                  error={fieldErrors.limitTonMax}
-                />
-                {networkMinStake && networkMaxStake && (
-                  <p className="text-muted-foreground text-[12px]">
-                    Network range:{' '}
-                    <span className="font-mono">
-                      {fromNano(networkMinStake)} – {fromNano(networkMaxStake)}{' '}
-                      GRAM
-                    </span>
-                  </p>
-                )}
-              </>
-            ) : (
-              <ShareInput
-                share={limitShareMax}
-                onShareChange={setLimitShareMax}
-                mode={limitShareMode}
-                onModeChange={setLimitShareMode}
-                percentInput={limitPercentInput}
-                onPercentInputChange={setLimitPercentInput}
-                label="Max share"
-                subject="projected balance"
-                error={fieldErrors.limitShareMax}
-                onClearError={() => clearErr('limitShareMax')}
-                projectedBalance={projectedBalance}
-              />
-            )}
+            <ValidatorLimitInput
+              allowGlobal={false}
+              type={limitType}
+              onTypeChange={(t) => setLimitType(t as 'ton' | 'share')}
+              tonMax={limitTonMax}
+              onTonMaxChange={setLimitTonMax}
+              shareMax={limitShareMax}
+              onShareMaxChange={setLimitShareMax}
+              shareMode={limitShareMode}
+              onShareModeChange={setLimitShareMode}
+              percentInput={limitPercentInput}
+              onPercentInputChange={setLimitPercentInput}
+              globalMinTon={globalMinTon}
+              globalMaxTon={globalMaxTon}
+              networkMinStake={networkMinStake}
+              networkMaxStake={networkMaxStake}
+              projectedBalance={projectedBalance}
+              errorTon={fieldErrors.limitTonMax}
+              errorShare={fieldErrors.limitShareMax}
+              onClearError={() => {
+                clearErr('limitTonMax');
+                clearErr('limitShareMax');
+              }}
+              typeLabel="Limit type"
+            />
             <Field
               label="Message value (GRAM)"
               type="number"

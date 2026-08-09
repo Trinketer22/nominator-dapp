@@ -3,6 +3,7 @@ import {
   Cell,
   Dictionary,
   beginCell,
+  fromNano,
   toNano,
   type Sender,
   type SenderArguments,
@@ -406,6 +407,80 @@ export function validateInitParams(
     return {
       field: 'mainValidator',
       message: 'Main validator address is not valid.',
+    };
+  }
+  return null;
+}
+
+// Ranges used to validate a per-validator GRAM limit. The pool's global range
+// comes from getLimitsPerValidator (on-chain) or, at init time, from the
+// global-limit fields in the same form. The network range comes from
+// getNetworkStakingLimits (config param 17). Any bound may be undefined when
+// the corresponding data hasn't loaded yet (or isn't established yet, e.g. the
+// pool's global range during init); in that case that bound is not checked.
+export interface ValidatorLimitRanges {
+  globalMinTon?: bigint;
+  globalMaxTon?: bigint;
+  networkMinStake?: bigint;
+  networkMaxStake?: bigint;
+}
+
+// Validate a per-validator GRAM max against the pool's global range and the
+// network staking range. The contract rejects individual GRAM limits outside
+// [minTonPerValidator, maxTonPerValidator] (IndividualLimitIsBelowGlobal /
+// ...AboveGlobal), and the global range itself must sit within the network
+// range (MinStakeBelowNetworkLimit / MaxStakeAboveNetworkLimit), so an
+// individual limit outside the network range is also invalid. Returns an error
+// message or null if valid.
+export function validateValidatorGramLimit(
+  maxTon: bigint,
+  context: string,
+  ranges: ValidatorLimitRanges,
+): string | null {
+  const { globalMinTon, globalMaxTon, networkMinStake, networkMaxStake } =
+    ranges;
+  if (globalMinTon !== undefined && maxTon < globalMinTon) {
+    return `${context}: max GRAM (${fromNano(maxTon)}) is below the pool minimum (${fromNano(globalMinTon)}).`;
+  }
+  if (globalMaxTon !== undefined && maxTon > globalMaxTon) {
+    return `${context}: max GRAM (${fromNano(maxTon)}) is above the pool maximum (${fromNano(globalMaxTon)}).`;
+  }
+  if (networkMinStake !== undefined && maxTon < networkMinStake) {
+    return `${context}: max GRAM (${fromNano(maxTon)}) is below the network minimum (${fromNano(networkMinStake)}).`;
+  }
+  if (networkMaxStake !== undefined && maxTon > networkMaxStake) {
+    return `${context}: max GRAM (${fromNano(maxTon)}) is above the network maximum (${fromNano(networkMaxStake)}).`;
+  }
+  return null;
+}
+
+// Validate the pool's global validator GRAM range (min/max per validator)
+// against the network staking range. Returns the error keyed to 'min' or 'max'
+// so the caller can map it to its own field id and render the inline message
+// under the correct input. Used by Update global validator limits and by
+// Deploy & Initialize (which sets the global range alongside the main
+// validator's individual limit).
+export function validateGlobalGramLimits(
+  min: bigint,
+  max: bigint,
+  network: { minStake?: bigint; maxStake?: bigint },
+): { field: 'min' | 'max'; msg: string } | null {
+  if (max <= min) {
+    return {
+      field: 'max',
+      msg: 'Max GRAM/validator must be > min GRAM/validator.',
+    };
+  }
+  if (network.minStake !== undefined && min < network.minStake) {
+    return {
+      field: 'min',
+      msg: `Min GRAM/validator (${fromNano(min)}) is below the network minimum (${fromNano(network.minStake)}).`,
+    };
+  }
+  if (network.maxStake !== undefined && max > network.maxStake) {
+    return {
+      field: 'max',
+      msg: `Max GRAM/validator (${fromNano(max)}) is above the network maximum (${fromNano(network.maxStake)}).`,
     };
   }
   return null;
