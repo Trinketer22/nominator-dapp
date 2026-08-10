@@ -23,7 +23,7 @@ Built with React, Vite, Tailwind CSS, and TonConnect for wallet interaction.
 | **GRAM max**           | A per-validator limit expressed as a hard GRAM cap per round.                                                                                                                            |
 | **Owner share**        | The fraction of round profit the pool owner receives (the rest goes to nominators). Expressed in share units (0..SHARE_BASE).                                                            |
 | **SHARE_BASE**         | The maximum share value (16777216 = 2^24). Used internally for fixed-point share math. 100% = SHARE_BASE.                                                                                |
-| **Refund bonus**       | A reward paid to validators for profitable rounds. Covers stake-recovery fees plus an external-ops bonus, split between owner and validators.                                            |
+| **Refund bonus**       | A reward paid to validators for profitable rounds. See [Refund bonus calculation](#refund-bonus-calculation).                                                                            |
 | **Stake / NewStake**   | The act of sending GRAM to the elector to participate in validation. Validators do this automatically each round.                                                                        |
 | **RecoverStake**       | Retrieving staked GRAM back from the elector after a round ends. Normally automatic; can be triggered manually — see [Emergency recovery](#emergency-recovery-when-a-validator-is-down). |
 | **UpdateVset**         | Advancing the pool's validator set to the current round. Normally automatic; can be triggered manually — see [Emergency recovery](#emergency-recovery-when-a-validator-is-down).         |
@@ -151,7 +151,7 @@ step is **optional** — skip it if you want the pool open to everyone.
 
 On each validator machine install MyTonCtrl in `nominator-pool-v2`
 mode and set up the node as described in 1.1 - 3.5 of
-[this article](https://docs.ton.org/nodes/cpp/run-validator). 
+[this article](https://docs.ton.org/nodes/cpp/run-validator).
 You'll need validator wallet's address from each validator to configure the pool.
 This is the address of the validator wallet that MyTonCtrl created on each validator machine and uses to interact with the pool.
 
@@ -172,8 +172,9 @@ validator_wallet_001   active  ...      v1   -1   Ef...
 ```
 
 Collect one such address per machine. You need to top them up with a small GRAM amount to keep the pool working.
-Pool will automatically refund used GRAMs to the wallets, so it is enough to top them up once 
-(until validator is not slashed multiple times, since in case of slashing pool does not top up validator's wallet).
+A reference value is 3 GRAM per round. See [Refund bonus calculation](#refund-bonus-calculation).
+The pool automatically refunds `refundBonus` to the wallets, so it is enough to top them up once as long as rounds are profitable.
+In unprofitable rounds, the validator doesn't get the bonus back, so its expenses are not compensated.
 
 ### Step 1: Connect your wallet
 
@@ -200,7 +201,7 @@ Pool will automatically refund used GRAMs to the wallets, so it is enough to top
 7. **Max GRAM / validator** — set the maximum GRAM each validator can stake
    (e.g. `10000000` for 10 million GRAM).
 8. **Min GRAM / validator** — set the minimum (e.g. `300000`).
-9. **Refund bonus (GRAM)** — the profitability reward per round (e.g. `3`).
+9. **Refund bonus (GRAM)** — the profitability [reward](#refund-bonus-calculation) per round.
 10. **Min stake (GRAM)** — the minimum GRAM a nominator must deposit
     (e.g. `1000`).
 11. **Min withdrawable rewards (GRAM)** — the minimum reward amount that can
@@ -256,7 +257,7 @@ You now have 1 validator (the main one from Step 2). Add 2 more:
 > **Note:** Round allowance options are: **1** = odd rounds only, **2** = even
 > rounds only, **3** = all rounds (both parities, two proxies per validator).
 
-### Step 4: Add funds to the pool (optional but recommended)
+### Step 4: Add owner funds to the pool (optional but recommended)
 
 Before validators can stake, the pool needs a GRAM balance:
 
@@ -315,8 +316,8 @@ and verify it with
 MyTonCtrl> pools_list
 ```
 
-* `<pool_name>` is any local label you like.
-* `pools_list` should show the pool as `active` with version `npool_v2`.
+- `<pool_name>` is any local label you like.
+- `pools_list` should show the pool as `active` with version `npool_v2`.
 
 The validators will start to send stake amounts as configured in the pool.
 
@@ -339,6 +340,24 @@ automatically by the validators:
 - **Adjust limits** globally or per-validator at any time.
 
 ---
+
+## Refund bonus calculation
+
+On a profitable round, the validator gets a bonus that is supposed to compensate
+for its operational upkeep.
+On an unprofitable round, the validator's upkeep is not compensated.
+
+The profitability criterion is that profit should exceed `refundBonus - 1 GRAM`.
+
+Validator expenses consist of the following components:
+
+1. New Stake expenses: **1 GRAM**.
+2. Recover Stake expenses: **1 GRAM**
+3. External upkeep costs like wallet storage, signing gas, and forwarding fees
+
+So **3 GRAM** is considered a reasonable default for a _masterchain_ validator.
+
+In that case, 2 profitable rounds cover the losses of 1 unprofitable round.
 
 ## Emergency recovery: when a validator is down
 
