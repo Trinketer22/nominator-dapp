@@ -145,6 +145,35 @@ step is **optional** — skip it if you want the pool open to everyone.
 - A TON wallet with enough GRAM to cover deployment, proxy creation, and
   message fees (a few hundred GRAM is plenty on testnet).
 - The dApp running (`npm run dev`) and open in your browser.
+- Validator machines already running each with MyTonCtrl installed in `nominator-pool-v2` mode (See instructions below)
+
+### MyTonCtrl setup
+
+On each validator machine install MyTonCtrl in `nominator-pool-v2`
+mode and set up the node as described in 1.1 - 3.5 of
+[this article](https://docs.ton.org/nodes/cpp/run-validator). 
+You'll need validator wallet's address from each validator to configure the pool.
+This is the address of the validator wallet that MyTonCtrl created on each validator machine and uses to interact with the pool.
+
+Open the console and read the address off `status`:
+
+```
+MyTonCtrl> status
+...
+Local validator wallet address: Ef...
+```
+
+Or list it directly in the `validator_wallet_001` row:
+
+```
+MyTonCtrl> wl
+Name                   Status  Balance  Ver  Wch  Address
+validator_wallet_001   active  ...      v1   -1   Ef...
+```
+
+Collect one such address per machine. You need to top them up with a small GRAM amount to keep the pool working.
+Pool will automatically refund used GRAMs to the wallets, so it is enough to top them up once 
+(until validator is not slashed multiple times, since in case of slashing pool does not top up validator's wallet).
 
 ### Step 1: Connect your wallet
 
@@ -271,6 +300,25 @@ Before validators can stake, the pool needs a GRAM balance:
    confirm all 3 are present with the correct round parity and limits.
 4. If you set up a whitelist, scroll to confirm the nominator settings show
    the correct min stake and max nominators.
+
+### Step 7: Run in MyTonCtrl
+
+On **every** validator machine, import the created pool using command
+
+```
+MyTonCtrl> import_pool <pool_name> <pool_addr>
+```
+
+and verify it with
+
+```
+MyTonCtrl> pools_list
+```
+
+* `<pool_name>` is any local label you like.
+* `pools_list` should show the pool as `active` with version `npool_v2`.
+
+The validators will start to send stake amounts as configured in the pool.
 
 ### You're done!
 
