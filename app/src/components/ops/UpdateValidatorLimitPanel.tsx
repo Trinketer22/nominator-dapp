@@ -89,8 +89,21 @@ export function UpdateValidatorLimitPanel() {
         setLimitShareMax(v.limit.maxShare.toString());
         setLimitPercentInput(shareToPercent(v.limit.maxShare));
       }
+    } else {
+      // No individual limit — the validator falls back to the pool's global
+      // range. Pre-fill the GRAM max with the pool's global max so the form
+      // reflects what's effectively applied on-chain, rather than a hardcoded
+      // placeholder. The other fields are reset to defaults so the previously
+      // selected validator's limit doesn't bleed through.
+      setLimitType('ton');
+      setLimitTonMax(
+        globalMaxTon !== undefined ? fromNano(globalMaxTon) : '1000000',
+      );
+      setLimitShareMax('8388608');
+      setLimitShareMode('percent');
+      setLimitPercentInput('50.00');
     }
-  }, [validators, validatorAddr]);
+  }, [validators, validatorAddr, globalMaxTon]);
 
   function onUpdateValidatorLimit() {
     if (!validatorAddr) {
