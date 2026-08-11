@@ -478,18 +478,18 @@ export function DeployInitPanel({
         )}
         <div className="grid grid-cols-2 gap-3">
           <Field
-            label="Max GRAM / validator"
-            type="number"
-            value={maxTonPerValidator}
-            onChange={withClear(setMaxTonPerValidator, 'maxTonPerValidator')}
-            error={fieldErrors.maxTonPerValidator}
-          />
-          <Field
             label="Min GRAM / validator"
             type="number"
             value={minTonPerValidator}
             onChange={withClear(setMinTonPerValidator, 'minTonPerValidator')}
             error={fieldErrors.minTonPerValidator}
+          />
+          <Field
+            label="Max GRAM / validator"
+            type="number"
+            value={maxTonPerValidator}
+            onChange={withClear(setMaxTonPerValidator, 'maxTonPerValidator')}
+            error={fieldErrors.maxTonPerValidator}
           />
         </div>
         <Field
