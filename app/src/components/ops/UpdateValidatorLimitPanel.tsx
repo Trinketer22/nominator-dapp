@@ -16,6 +16,7 @@ import {
   getValidators,
   makeLimitShare,
   makeLimitTon,
+  roundParityLabel,
   shareToPercent,
   updateValidatorLimit,
   validateBigIntInput,
@@ -203,8 +204,9 @@ export function UpdateValidatorLimitPanel() {
             if (!v) return null;
             return (
               <>
-                {v.isMain ? '(main)' : 'extra'} · round parity:{' '}
-                {v.roundParity.toString()} · {v.isBanned ? 'banned' : 'active'}
+                {v.isMain ? '(main)' : 'extra'} · round allowance:{' '}
+                {roundParityLabel(v.roundParity)} ·{' '}
+                {v.isBanned ? 'banned' : 'active'}
                 {v.limit
                   ? ` · current limit: ${v.limit.$ === 'ValidatorLimitTon' ? `${fromNano(v.limit.maxTon)} GRAM` : `share ${v.limit.maxShare}/${SHARE_BASE}`}`
                   : ' · no individual limit'}

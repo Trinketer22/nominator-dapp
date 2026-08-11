@@ -42,6 +42,14 @@ export function percentToShare(percent: string): string {
   return BigInt(Math.round((n / 100) * Number(SHARE_BASE))).toString();
 }
 
+// Format a validator's round parity/allowance value (1=odd, 2=even, 3=all)
+// as a friendly label. Matches the RoundAllowanceSelect options.
+export function roundParityLabel(parity: bigint): string {
+  if (parity === 1n) return 'Odd rounds';
+  if (parity === 2n) return 'Even rounds';
+  return 'All rounds';
+}
+
 export function tonToNano(ton: string): bigint {
   try {
     return toNano(ton);

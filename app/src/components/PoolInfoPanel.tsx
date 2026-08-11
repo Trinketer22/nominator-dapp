@@ -17,6 +17,7 @@ import {
   getPoolInvariants,
   getValidatorInfo,
   getValidators,
+  roundParityLabel,
 } from '@/lib/pool';
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -353,14 +354,8 @@ export function PoolInfoPanel({ poolAddress }: { poolAddress: string }) {
                       value={selectedVal.usageState.toString()}
                     />
                     <Row
-                      label="Round parity"
-                      value={
-                        selectedVal.roundParity === 1n
-                          ? 'Odd rounds'
-                          : selectedVal.roundParity === 2n
-                            ? 'Even rounds'
-                            : 'All rounds'
-                      }
+                      label="Round allowance"
+                      value={roundParityLabel(selectedVal.roundParity)}
                     />
                     <Row
                       label="Even proxy"

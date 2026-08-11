@@ -11,6 +11,7 @@ import {
   fmtAddr,
   getValidators,
   removeValidator,
+  roundParityLabel,
   validateGramInput,
 } from '@/lib/pool';
 import { isValidAddress } from '@/lib/ton';
@@ -100,7 +101,7 @@ export function RemoveValidatorPanel() {
             if (!v) return null;
             return (
               <>
-                round parity: {v.roundParity.toString()} ·{' '}
+                round allowance: {roundParityLabel(v.roundParity)} ·{' '}
                 {v.isBanned ? 'banned' : 'active'}
                 {v.limit
                   ? ` · limit: ${v.limit.$ === 'ValidatorLimitTon' ? `${fromNano(v.limit.maxTon)} GRAM` : `share ${v.limit.maxShare}/${SHARE_BASE}`}`
