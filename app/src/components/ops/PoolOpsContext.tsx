@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -9,11 +9,17 @@ import {
 import { Address } from '@ton/core';
 
 import { useToast } from '@/components/ui/toast';
+import { Button } from '@/components/ui/button';
 import { useRouter } from '@/lib/router';
 import type { Network } from '@/lib/router';
 import { prettyError } from '@/lib/errors';
 import { invalidatePoolQueries } from '@/lib/query-keys';
-import { getPoolOwner, makeSender, requireOwner } from '@/lib/pool';
+import {
+  getPoolOwner,
+  makeSender,
+  requireOwner,
+  verifyPoolCode,
+} from '@/lib/pool';
 import { tonscanTxUrl } from '@/lib/ton';
 import {
   getWalletBaselineLt,
@@ -78,19 +84,31 @@ export function PoolOpsProvider({
     [tc, network, wallet],
   );
 
-  // getPoolOwner's get-method throws when the contract is not deployed, so a
-  // failed query means the pool doesn't exist at this address. Surfaced here
-  // (centrally, like the wallet-not-connected check below) so every operation
-  // panel is gated at once instead of each one showing "(not owner)".
+  // getPoolOwner's get-method throws when the contract is not deployed or is
+  // not a pool at all. verifyPoolCode distinguishes a different-version pool
+  // (deployed, code hash differs) from a genuinely absent contract — but only
+  // matters when getPoolOwner succeeded (i.e. the owner getter is compatible).
+  // Same query key as App.tsx, so the result is shared.
   const {
     data: poolOwner,
-    isError: poolNotDeployed,
+    isError: poolOwnerError,
     isPending: poolOwnerPending,
   } = useQuery({
     queryKey: ['pool-owner', network, poolAddress],
     enabled: !!poolAddress,
     queryFn: () => getPoolOwner(network, poolAddress),
   });
+  const { data: codeMismatch, isPending: codeVerifyPending } = useQuery({
+    queryKey: ['pool-code-verify', network, poolAddress],
+    enabled: !!poolAddress,
+    queryFn: () => verifyPoolCode(network, poolAddress),
+    staleTime: Infinity,
+  });
+  // User can override the code-mismatch gate to operate on a different-version
+  // pool. Reset the override when the pool address changes so it doesn't carry
+  // over to a different contract.
+  const [allowOps, setAllowOps] = useState(false);
+  useEffect(() => setAllowOps(false), [poolAddress]);
   const isOwner = !!(
     poolOwner &&
     wallet &&
@@ -208,7 +226,18 @@ export function PoolOpsProvider({
     );
   }
 
-  if (poolNotDeployed) {
+  if (poolOwnerPending || codeVerifyPending) {
+    return (
+      <div className="w-full max-w-md rounded-xl border p-6 text-center">
+        <p className="text-muted-foreground text-[14px]">Loading pool...</p>
+      </div>
+    );
+  }
+
+  // getPoolOwner's get-method throws when the contract is not deployed or is
+  // not a pool at all — in either case the "Not deployed" note is correct and
+  // no override is offered (operating on a non-pool contract is meaningless).
+  if (poolOwnerError) {
     return (
       <div className="w-full max-w-md rounded-xl border p-6 text-center">
         <p className="text-muted-foreground text-[14px]">
@@ -219,10 +248,14 @@ export function PoolOpsProvider({
     );
   }
 
-  if (poolOwnerPending) {
+  // The owner getter worked, so this is a pool, but verifyPoolCode flagged a
+  // code mismatch (a different pool version). Gate operations behind an
+  // explicit override since behaviour may differ from what the UI expects.
+  if (codeMismatch && !allowOps) {
     return (
-      <div className="w-full max-w-md rounded-xl border p-6 text-center">
-        <p className="text-muted-foreground text-[14px]">Loading pool...</p>
+      <div className="w-full max-w-md rounded-xl border border-warning/50 bg-warning/10 p-5 flex flex-col gap-3 text-center">
+        <p className="text-[13px] text-foreground/90">{codeMismatch}</p>
+        <Button onClick={() => setAllowOps(true)}>Allow operations</Button>
       </div>
     );
   }
