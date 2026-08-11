@@ -83,7 +83,13 @@ export default function App() {
   }, [chain, setTestnet]);
 
   // Fetch the pool owner to show owner status near the network indicator.
-  const { data: poolOwner } = useQuery({
+  // A failed get-method means the contract is not deployed (or not reachable),
+  // surfaced as "Not deployed" rather than stuck on "loading…".
+  const {
+    data: poolOwner,
+    isError: poolOwnerError,
+    isPending: poolOwnerPending,
+  } = useQuery({
     queryKey: ['pool-owner', network, poolAddr],
     enabled: !!poolAddr && poolAddrValid,
     queryFn: () => getPoolOwner(network, poolAddr),
@@ -168,8 +174,10 @@ export default function App() {
           </p>
           {poolAddr && poolAddrValid && walletAddress && (
             <p className="text-muted-foreground text-[13px]">
-              {poolOwner === undefined ? (
+              {poolOwnerPending ? (
                 <span className="text-muted-foreground">Owner: loading…</span>
+              ) : poolOwnerError ? (
+                <span className="text-muted-foreground">Not deployed</span>
               ) : (
                 <span
                   className={cn(

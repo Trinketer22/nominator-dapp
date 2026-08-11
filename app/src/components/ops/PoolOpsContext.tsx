@@ -78,7 +78,15 @@ export function PoolOpsProvider({
     [tc, network, wallet],
   );
 
-  const { data: poolOwner } = useQuery({
+  // getPoolOwner's get-method throws when the contract is not deployed, so a
+  // failed query means the pool doesn't exist at this address. Surfaced here
+  // (centrally, like the wallet-not-connected check below) so every operation
+  // panel is gated at once instead of each one showing "(not owner)".
+  const {
+    data: poolOwner,
+    isError: poolNotDeployed,
+    isPending: poolOwnerPending,
+  } = useQuery({
     queryKey: ['pool-owner', network, poolAddress],
     enabled: !!poolAddress,
     queryFn: () => getPoolOwner(network, poolAddress),
@@ -196,6 +204,25 @@ export function PoolOpsProvider({
             ? 'Connect your wallet to perform pool operations.'
             : 'Restoring wallet connection...'}
         </p>
+      </div>
+    );
+  }
+
+  if (poolNotDeployed) {
+    return (
+      <div className="w-full max-w-md rounded-xl border p-6 text-center">
+        <p className="text-muted-foreground text-[14px]">
+          No pool is deployed at this address. Use the Deploy &amp; Init tab to
+          create one.
+        </p>
+      </div>
+    );
+  }
+
+  if (poolOwnerPending) {
+    return (
+      <div className="w-full max-w-md rounded-xl border p-6 text-center">
+        <p className="text-muted-foreground text-[14px]">Loading pool...</p>
       </div>
     );
   }
