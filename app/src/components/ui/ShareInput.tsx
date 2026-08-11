@@ -41,6 +41,30 @@ export function ShareInput({
   subject: string;
   projectedBalance?: bigint;
 }) {
+  // Validate the value the user is actually looking at so the error message
+  // matches the active input mode. Caller-supplied `error` is only used when
+  // the displayed value is in bounds (e.g. for submit-time checks callers may
+  // add later); an out-of-bounds value always shows the mode-aware message.
+  const boundsError = (() => {
+    if (mode === 'percent') {
+      const n = Number(percentInput);
+      if (
+        percentInput.trim() !== '' &&
+        Number.isFinite(n) &&
+        (n < 0 || n > 100)
+      ) {
+        return 'Must be in 0..100%';
+      }
+      return undefined;
+    }
+    const raw = parseBigInt(share);
+    if (raw !== null && (raw < 0n || raw > SHARE_BASE)) {
+      return `Must be in 0..${SHARE_BASE}`;
+    }
+    return undefined;
+  })();
+  const fieldError = boundsError ?? error;
+
   return (
     <>
       <label className="flex flex-col gap-1 text-left">
@@ -77,7 +101,7 @@ export function ShareInput({
           }
           onClearError();
         }}
-        error={error}
+        error={fieldError}
       />
       {(() => {
         const rawShare = parseBigInt(share) ?? 0n;
