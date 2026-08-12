@@ -28,6 +28,12 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+          submodules: true
+
+      - name: Setup Acton
+        uses: ton-blockchain/setup-acton@2d38fd579e1bf8753a3e0cff9ad695612b98a676 # v1.0.0
+        with:
+          working-directory: contract
 
       - name: Setup Node
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
@@ -40,6 +46,9 @@ jobs:
 
       - name: Audit dependencies
         run: npm audit --omit=dev
+
+      - name: Generate wrappers
+        run: npm run gen-wrappers
 
       - name: Typecheck
         run: npm run typecheck
