@@ -33,6 +33,9 @@ wallets.toml
 global.wallets.toml
 global.libraries.toml
 
+# Generated TypeScript wrappers
+wrappers-ts/
+
 # coverage
 lcov.info
 specs.md
