@@ -335,7 +335,6 @@ export function PoolInfoPanel({ poolAddress }: { poolAddress: string }) {
                     <option value="">Select a validator...</option>
                     {validators.map((v) => (
                       <option key={v.address} value={v.address}>
-                        {v.isMain ? '(main) ' : ''}
                         {fmtAddr(v.address, network)}
                         {v.isBanned ? ' (banned)' : ''}
                       </option>
@@ -344,10 +343,6 @@ export function PoolInfoPanel({ poolAddress }: { poolAddress: string }) {
                 </label>
                 {selectedVal && (
                   <div className="flex flex-col gap-1">
-                    <Row
-                      label="Role"
-                      value={selectedVal.isMain ? '(main)' : 'extra'}
-                    />
                     <Row label="Banned" value={String(selectedVal.isBanned)} />
                     <Row
                       label="Usage state"

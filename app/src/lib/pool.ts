@@ -408,13 +408,13 @@ export function validateInitParams(
   } catch {
     return {
       field: 'mainValidator',
-      message: 'Main validator address is not valid.',
+      message: 'First validator address is not valid.',
     };
   }
   if (!Address.isAddress(mainValidatorAddr)) {
     return {
       field: 'mainValidator',
-      message: 'Main validator address is not valid.',
+      message: 'First validator address is not valid.',
     };
   }
   return null;
@@ -623,7 +623,6 @@ export async function getMaxOwnerShare(
 
 export interface ValidatorEntry {
   address: string;
-  isMain: boolean;
   isBanned: boolean;
   usageState: bigint;
   roundParity: bigint;
@@ -632,12 +631,10 @@ export interface ValidatorEntry {
   limit: ValidatorLimit | null;
 }
 
-// Returns the list of validators in the pool: the main validator first, then
-// any extra validators from the validators map. Matches the picker in
-// pool-utils.tolk's collectValidatorOptions (includeMain = true). Also
-// surfaces the pool's current maxNominators from the same get_pool_data call,
-// so callers (e.g. the Update nominator limits form) can read it without a
-// separate fetch.
+// Returns the list of validators registered in the pool, read from the
+// validators map. Also surfaces the pool's current maxNominators from the
+// same get_pool_data call, so callers (e.g. the Update nominator limits
+// form) can read it without a separate fetch.
 export async function getValidators(
   network: Network,
   poolAddress: string,
@@ -646,23 +643,9 @@ export async function getValidators(
   const vd = data.validators.ref;
   const result: ValidatorEntry[] = [];
 
-  const mainAddr = vd.mainValidatorAddress.toString();
-  const main = vd.mainValidatorData.ref;
-  result.push({
-    address: mainAddr,
-    isMain: true,
-    isBanned: main.isBanned,
-    usageState: main.usageState,
-    roundParity: main.roundParity,
-    evenProxy: main.evenProxy,
-    oddProxy: main.oddProxy,
-    limit: main.limit,
-  });
-
   for (const [addr, val] of vd.validators) {
     result.push({
       address: addr.toString(),
-      isMain: false,
       isBanned: val.isBanned,
       usageState: val.usageState,
       roundParity: val.roundParity,

@@ -1,4 +1,4 @@
-// Reusable round allowance dropdown. Used by Deploy & Init (main validator)
+// Reusable round allowance dropdown. Used by Deploy & Init (first validator)
 // and Add Validator. `value` is the string "1" (odd), "2" (even), or "3"
 // (all rounds).
 export function RoundAllowanceSelect({

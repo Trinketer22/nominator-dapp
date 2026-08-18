@@ -179,7 +179,6 @@ export function UpdateValidatorLimitPanel() {
             <option value="">Select a validator...</option>
             {validators.map((v) => (
               <option key={v.address} value={v.address}>
-                {v.isMain ? '(main) ' : ''}
                 {fmtAddr(v.address, network)}
                 {v.isBanned ? ' (banned)' : ''}
               </option>
@@ -204,8 +203,7 @@ export function UpdateValidatorLimitPanel() {
             if (!v) return null;
             return (
               <>
-                {v.isMain ? '(main)' : 'extra'} · round allowance:{' '}
-                {roundParityLabel(v.roundParity)} ·{' '}
+                round allowance: {roundParityLabel(v.roundParity)} ·{' '}
                 {v.isBanned ? 'banned' : 'active'}
                 {v.limit
                   ? ` · current limit: ${v.limit.$ === 'ValidatorLimitTon' ? `${fromNano(v.limit.maxTon)} GRAM` : `share ${v.limit.maxShare}/${SHARE_BASE}`}`

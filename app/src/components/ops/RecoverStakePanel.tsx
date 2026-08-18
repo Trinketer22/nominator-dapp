@@ -136,7 +136,6 @@ export function RecoverStakePanel() {
             <option value="">Select a validator...</option>
             {validators.map((v) => (
               <option key={v.address} value={v.address}>
-                {v.isMain ? '(main) ' : ''}
                 {fmtAddr(v.address, network)}
                 {v.isBanned ? ' (banned)' : ''}
               </option>

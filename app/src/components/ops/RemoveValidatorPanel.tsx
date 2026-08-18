@@ -58,8 +58,7 @@ export function RemoveValidatorPanel() {
     <>
       <h2 className="text-[15px] font-semibold">Remove validator</h2>
       <p className="text-muted-foreground text-[12px]">
-        The main validator cannot be removed. Validators with outstanding stake
-        are banned and purged after recovery.
+        Validators with outstanding stake are banned and purged after recovery.
       </p>
       <label className="flex flex-col gap-1 text-left">
         <span className="text-muted-foreground text-[12px]">Validator</span>
@@ -73,14 +72,12 @@ export function RemoveValidatorPanel() {
             className="h-9 rounded-md border border-input bg-background px-3 text-[13px] font-mono"
           >
             <option value="">Select a validator...</option>
-            {validators
-              .filter((v) => !v.isMain)
-              .map((v) => (
-                <option key={v.address} value={v.address}>
-                  {fmtAddr(v.address, network)}
-                  {v.isBanned ? ' (banned)' : ''}
-                </option>
-              ))}
+            {validators.map((v) => (
+              <option key={v.address} value={v.address}>
+                {fmtAddr(v.address, network)}
+                {v.isBanned ? ' (banned)' : ''}
+              </option>
+            ))}
           </select>
         ) : (
           <input

@@ -184,7 +184,6 @@ export function AddValidatorPanel() {
                 className="flex items-center justify-between rounded-md border px-3 py-1.5 text-[12px] font-mono"
               >
                 <span className="break-all">
-                  {v.isMain ? '(main) ' : ''}
                   <AddrLink
                     addr={v.address}
                     network={network}

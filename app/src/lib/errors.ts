@@ -47,7 +47,6 @@ export const POOL_ERROR_CODES: Record<number, string> = {
   502: 'Recovery time is too early',
   600: 'Validator not found in the pool',
   601: 'Validator already exists in the pool',
-  602: 'Main validator cannot be removed',
   603: 'Elections have not started yet',
   604: 'Elections have already ended',
   605: 'Owner share is undercapitalized for the active slots',

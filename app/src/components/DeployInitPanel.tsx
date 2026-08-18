@@ -86,7 +86,7 @@ export function DeployInitPanel({
   const [minWithdrawableRewards, setMinWithdrawableRewards] = useState('1');
   const [initValue, setInitValue] = useState('250');
 
-  // main validator limit (applied at init time)
+  // first validator limit (applied at init time)
   const [limitType, setLimitType] = useState<'global' | 'ton' | 'share'>(
     'global',
   );
@@ -187,7 +187,7 @@ export function DeployInitPanel({
     // Validate the pool's global validator range against the network staking
     // range (same check the Update global validator limits tab performs) so an
     // out-of-range init bounces here with an inline error instead of on-chain,
-    // and so the main validator's individual limit below can be checked against
+    // and so the first validator's individual limit below can be checked against
     // a range that is already known to be valid.
     const gerr = validateGlobalGramLimits(
       minTonPerValidatorVal,
@@ -236,7 +236,7 @@ export function DeployInitPanel({
       clearErr,
     );
     if (initValueVal === null) return;
-    // Build the per-validator limit for the main validator. 'global' means
+    // Build the per-validator limit for the first validator. 'global' means
     // null (the validator uses the pool's global range).
     let limit = null;
     if (limitType === 'ton') {
@@ -251,7 +251,7 @@ export function DeployInitPanel({
       // validate the individual limit against it plus the network range — the
       // same checks Add Validator and Individual Validator Limit perform
       // (IndividualLimitIsBelowGlobal / ...AboveGlobal and the network bounds).
-      const err = validateValidatorGramLimit(maxTon, 'Main validator limit', {
+      const err = validateValidatorGramLimit(maxTon, 'First validator limit', {
         globalMinTon: minTonPerValidatorVal,
         globalMaxTon: maxTonPerValidatorVal,
         networkMinStake,
@@ -387,7 +387,7 @@ export function DeployInitPanel({
       <section className="rounded-xl border p-5 flex flex-col gap-3">
         <h2 className="text-[15px] font-semibold">Deploy & Initialize pool</h2>
         <p className="text-muted-foreground text-[12px]">
-          Deploys the pool contract and initializes it with the main validator,
+          Deploys the pool contract and initializes it with the first validator,
           limits, and nominator settings in a single flow. The connected wallet
           is the pool owner.
         </p>
@@ -415,7 +415,7 @@ export function DeployInitPanel({
           </div>
         )}
         <Field
-          label="Main validator address"
+          label="First validator address"
           value={mainValidator}
           onChange={withClear(setMainValidator, 'mainValidator')}
           placeholder="UQ..."
@@ -445,7 +445,7 @@ export function DeployInitPanel({
             clearErr('limitTonMax');
             clearErr('limitShareMax');
           }}
-          typeLabel="Main validator limit"
+          typeLabel="First validator limit"
         />
         <div className="grid grid-cols-2 gap-3 items-start">
           <ShareInput
