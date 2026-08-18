@@ -8,6 +8,7 @@ import { usePoolOps } from './PoolOpsContext';
 import { useFieldErrors } from './useFieldErrors';
 import {
   fmtAddr,
+  computeRecoveryEligibility,
   getValidatorInfo,
   getValidators,
   recoverStakeUnrestricted,
@@ -51,27 +52,13 @@ export function RecoverStakePanel() {
 
   // Compute recovery eligibility for the selected validator, mirroring the
   // contract's checkRecoverRequirements.
-  const recoverEligible = useMemo(() => {
-    if (!recoverValidatorInfo) return false;
-    const info = recoverValidatorInfo;
-    const roundIndex = Number(info.roundIndex);
+  const recovery = useMemo(() => {
+    if (!recoverValidatorInfo) return null;
     const usageState =
       validators?.find((x) => x.address === validatorAddr)?.usageState ?? 0n;
-    let bitIdx = 2 - ((roundIndex - 1) & 1);
-    if ((Number(usageState) & bitIdx) === 0) bitIdx += 1;
-    const closest =
-      (bitIdx & 1) === 1 ? info.usage.curRoundUsage : info.usage.prevRoundUsage;
-    if (!closest) return false;
-    const rot = closest.usage.rotation;
-    if (rot.rotationCount < 2n) return false;
-    if (rot.rotationCount === 2n) {
-      const now = Math.floor(Date.now() / 1000);
-      const eligibleAt =
-        Number(rot.rotationTime) + Number(closest.usage.heldFor) + 60;
-      return now > eligibleAt;
-    }
-    return true;
+    return computeRecoveryEligibility(recoverValidatorInfo, usageState);
   }, [recoverValidatorInfo, validators, validatorAddr]);
+  const recoverEligible = recovery?.eligible ?? false;
 
   function onRecoverStake() {
     if (!validatorAddr) {
@@ -169,25 +156,9 @@ export function RecoverStakePanel() {
             <p className="text-muted-foreground">Loading rotation...</p>
           )}
           {recoverValidatorInfo &&
+            recovery &&
             (() => {
-              // Mirror the contract's closest-round selection:
-              //   roundBitIdx = toBitIndex(roundIndex - 1) = 2 - ((roundIndex-1) & 1)
-              //   if (usageState & roundBitIdx) == 0 → roundBitIdx += 1
-              //   roundBitIdx & 1 → odd round (prevRoundUsage when parity matches)
-              const info = recoverValidatorInfo;
-              const roundIndex = Number(info.roundIndex);
-              const usageState =
-                validators?.find((x) => x.address === validatorAddr)
-                  ?.usageState ?? 0n;
-              let bitIdx = 2 - ((roundIndex - 1) & 1);
-              if ((Number(usageState) & bitIdx) === 0) bitIdx += 1;
-              // bitIdx 1 → odd parity → curRoundUsage if roundIndex is odd
-              // bitIdx 2 → even parity → prevRoundUsage
-              const isOdd = (bitIdx & 1) === 1;
-              const closest = isOdd
-                ? info.usage.curRoundUsage
-                : info.usage.prevRoundUsage;
-              if (!closest) {
+              if (!recovery.closest) {
                 return (
                   <p>
                     No usage record for the closest round (stake may already be
@@ -195,18 +166,13 @@ export function RecoverStakePanel() {
                   </p>
                 );
               }
+              const closest = recovery.closest;
               const rot = closest.usage.rotation;
-              const heldFor = closest.usage.heldFor;
               const rotTime = Number(rot.rotationTime);
-              const eligible = rot.rotationCount >= 2n;
-              const eligibleAt =
-                rot.rotationCount === 2n ? rotTime + Number(heldFor) + 60 : 0;
-              const now = Math.floor(Date.now() / 1000);
-              const timeLeft = eligibleAt > 0 ? eligibleAt - now : 0;
               return (
                 <>
                   <p>
-                    closest round: {isOdd ? 'odd (cur)' : 'even (prev)'} · ton
+                    closest round: {recovery.usePrev ? 'prev' : 'cur'} · ton
                     used: {fromNano(closest.usage.tonUsed)} GRAM
                   </p>
                   <p>
@@ -216,10 +182,14 @@ export function RecoverStakePanel() {
                       ? new Date(rotTime * 1000).toLocaleString()
                       : '—'}
                   </p>
-                  <p className={eligible ? 'text-success' : 'text-warning'}>
-                    {eligible
-                      ? timeLeft > 0
-                        ? `eligible in ${Math.ceil(timeLeft / 60)} min`
+                  <p
+                    className={
+                      recovery.eligible ? 'text-success' : 'text-warning'
+                    }
+                  >
+                    {recovery.eligible
+                      ? recovery.timeLeft > 0
+                        ? `eligible in ${Math.ceil(recovery.timeLeft / 60)} min`
                         : 'eligible for recovery'
                       : 'not yet eligible (needs 2 rotations)'}
                   </p>

@@ -22,6 +22,7 @@ import {
   type ValidatorLimit,
   type Storage,
   type GetValidatorInfo,
+  type ValidatorUsageStats,
 } from '@wrappers/Pool.gen';
 
 import { getTonClient } from './ton';
@@ -557,6 +558,57 @@ export async function getValidatorInfo(
   return openPool(network, poolAddress).getValidatorInfo(
     Address.parse(validatorAddress),
   );
+}
+
+// Mirrors Pool.tolk sendStakeRecovery's closest-round selection
+// checkRecoverRequirements:
+//   rotationCount < 2  → not eligible (round too early)
+//   rotationCount == 2 → eligible once now > rotationTime + heldFor + 60
+//   rotationCount > 2  → eligible (timestamp no longer relevant)
+export interface RecoveryEligibility {
+  // The usage record for the round the contract would recover from, or null if
+  // the validator has no record there (e.g. stake already recovered).
+  closest: ValidatorUsageStats | null;
+  // True when the affected round is prevRound, false when it is curRound.
+  usePrev: boolean;
+  // Eligibility state mirroring checkRecoverRequirements.
+  eligible: boolean;
+  // Unix seconds at which rotationCount == 2 becomes eligible, else 0.
+  eligibleAt: number;
+  // Seconds until eligibleAt (negative when already past it), else 0.
+  timeLeft: number;
+}
+
+export function computeRecoveryEligibility(
+  info: GetValidatorInfo,
+  usageState: bigint,
+  now: number = Math.floor(Date.now() / 1000),
+): RecoveryEligibility {
+  const roundIndex = Number(info.roundIndex);
+  const bitIdx = 2 - ((roundIndex - 1) & 1);
+  const usePrev = (Number(usageState) & bitIdx) > 0;
+  const closest = usePrev
+    ? info.usage.prevRoundUsage
+    : info.usage.curRoundUsage;
+
+  if (!closest) {
+    return {
+      closest: null,
+      usePrev,
+      eligible: false,
+      eligibleAt: 0,
+      timeLeft: 0,
+    };
+  }
+
+  const rot = closest.usage.rotation;
+  const heldFor = Number(closest.usage.heldFor);
+  const rotTime = Number(rot.rotationTime);
+  const eligibleAt = rot.rotationCount === 2n ? rotTime + heldFor + 60 : 0;
+  const eligible =
+    rot.rotationCount >= 2n && (rot.rotationCount > 2n || now > eligibleAt);
+  const timeLeft = eligibleAt > 0 ? eligibleAt - now : 0;
+  return { closest, usePrev, eligible, eligibleAt, timeLeft };
 }
 
 export async function getLimitsPerValidator(
