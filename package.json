@@ -7,7 +7,7 @@
   "author": "TON Core",
   "scripts": {
     "dev": "npm run gen-wrappers && vite",
-    "gen-wrappers": "acton --project-root contract build && acton --project-root contract wrapper Pool --ts --output-dir wrappers-ts",
+    "gen-wrappers": "acton --project-root contract build && acton --project-root contract test && acton --project-root contract wrapper Pool --ts --output-dir wrappers-ts",
     "build": "npm run gen-wrappers && vite build && node --env-file-if-exists=.env scripts/write-manifest.js",
     "fmt": "prettier --write .",
     "fmt:check": "prettier --check .",
