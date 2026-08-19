@@ -3,6 +3,8 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "license": "MIT",
+  "author": "TON Core",
   "scripts": {
     "dev": "npm run gen-wrappers && vite",
     "gen-wrappers": "acton --project-root contract build && acton --project-root contract wrapper Pool --ts --output-dir wrappers-ts",
