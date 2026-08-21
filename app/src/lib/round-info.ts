@@ -12,6 +12,12 @@ import type { Network } from './router';
 export const ROUND_INFO_OPCODE = 0xe4649054; // RoundInfoMessage
 export const STAKE_RETURNED_OPCODE = 0xd6d1ff31; // StakeReturned
 
+// How deep the round history goes: ~100 rounds (~2 months) is far deeper than
+// anyone needs. One RoundInfoMessage per round; StakeReturned is one per
+// validator recovery (max 32 validators per round, plus rotation re-stakes).
+export const MAX_ROUND_INFO_ROWS = 100;
+export const MAX_STAKE_RETURNED_ROWS = 3200;
+
 export interface RoundInfoEntry {
   roundIndex: bigint;
   used: bigint; // nanoTON
@@ -61,14 +67,16 @@ function bodyCell(msg: V3Message): Cell | null {
   }
 }
 
-// Fetch every RoundInfoMessage sent by the pool to the owner. These are emitted
-// by Storage.finalizeRound (contracts/Pool.tolk) when a round rotates, one per
-// completed round, carrying the round's aggregate used/returned totals.
+// Fetch RoundInfoMessage events sent by the pool to the owner. These are
+// emitted by Storage.finalizeRound (contracts/Pool.tolk) when a round rotates,
+// one per completed round, carrying the round's aggregate used/returned totals.
+// Fetched newest-first so that, if history exceeds maxRows, the recent events
+// are kept; the result is reversed to chronological order for downstream use.
 export async function getRoundInfos(
   network: Network,
   poolAddress: string,
   ownerAddress: string,
-  maxRows = 1000,
+  maxRows = MAX_ROUND_INFO_ROWS,
 ): Promise<RoundInfoEntry[]> {
   const client = getToncenterV3(network);
   const messages = await client.getMessagesAll(
@@ -76,7 +84,7 @@ export async function getRoundInfos(
       source: toRawAddress(poolAddress),
       destination: toRawAddress(ownerAddress),
       opcode: `0x${ROUND_INFO_OPCODE.toString(16)}`,
-      sort: 'asc',
+      sort: 'desc',
       limit: 1000,
     },
     maxRows,
@@ -100,7 +108,7 @@ export async function getRoundInfos(
       // Skip malformed/bounced bodies silently — they cannot contribute stats.
     }
   }
-  return out;
+  return out.reverse();
 }
 
 // Read the pool's live cur/prev rounds directly from storage. These are the
@@ -232,15 +240,17 @@ export function aggregateRoundSplit(
   return [...map.values()].sort((a, b) => (b.returned > a.returned ? 1 : -1));
 }
 
-// Fetch every StakeReturned message sent by the pool (optionally to a specific
+// Fetch StakeReturned messages sent by the pool (optionally to a specific
 // validator). These are emitted by the RecoverStake handler (contracts/Pool.tolk)
 // when a validator's stake is recovered from the elector, carrying that
-// validator's used/returned totals for the just-closed stake.
+// validator's used/returned totals for the just-closed stake. Fetched
+// newest-first so that, if history exceeds maxRows, the recent events are kept;
+// the result is reversed to chronological order for downstream use.
 export async function getStakeReturneds(
   network: Network,
   poolAddress: string,
   validatorAddress?: string,
-  maxRows = 1000,
+  maxRows = MAX_STAKE_RETURNED_ROWS,
 ): Promise<StakeReturnedEntry[]> {
   const client = getToncenterV3(network);
   const messages = await client.getMessagesAll(
@@ -250,7 +260,7 @@ export async function getStakeReturneds(
         ? { destination: toRawAddress(validatorAddress) }
         : {}),
       opcode: `0x${STAKE_RETURNED_OPCODE.toString(16)}`,
-      sort: 'asc',
+      sort: 'desc',
       limit: 1000,
     },
     maxRows,
@@ -274,7 +284,7 @@ export async function getStakeReturneds(
       // Skip malformed/bounced bodies silently.
     }
   }
-  return out;
+  return out.reverse();
 }
 
 // Group StakeReturned events by validator and sum used/returned. Used by the
