@@ -14,6 +14,8 @@ import {
   getRoundInfos,
   getStakeReturneds,
   mergeRoundInfos,
+  MAX_ROUND_INFO_ROWS,
+  MAX_STAKE_RETURNED_ROWS,
   type RoundInfoEntry,
   type RoundValidatorSplit,
   type StakeReturnedEntry,
@@ -449,26 +451,60 @@ export function RoundInfoPanel({ poolAddress }: { poolAddress: string }) {
 
   const ownerRaw = owner ? owner.toRawString() : '';
 
+  // Fetch one round more than displayed. If older history exists, the first
+  // dropped round's close time bounds the StakeReturned query, so events from
+  // rounds outside the displayed window are never fetched (and can never be
+  // mis-attributed to the oldest displayed round).
   const {
-    data: roundInfos,
+    data: fetchedRounds,
     isLoading: riLoading,
     error: riError,
   } = useQuery({
     queryKey: ['pool-round-infos', network, poolAddress],
     enabled: !!poolAddress && !!ownerRaw,
     refetchInterval: POOL_REFETCH_INTERVAL_MS,
-    queryFn: () => getRoundInfos(network, poolAddress, ownerRaw),
+    queryFn: () =>
+      getRoundInfos(network, poolAddress, ownerRaw, MAX_ROUND_INFO_ROWS + 1),
   });
 
+  // The displayed/stat window: the newest MAX_ROUND_INFO_ROWS rounds.
+  const roundInfos = useMemo(
+    () =>
+      fetchedRounds && fetchedRounds.length > MAX_ROUND_INFO_ROWS
+        ? fetchedRounds.slice(fetchedRounds.length - MAX_ROUND_INFO_ROWS)
+        : fetchedRounds,
+    [fetchedRounds],
+  );
+  // Events strictly after this time belong to the displayed window. Undefined
+  // when the whole history fits (fewer rounds than the window).
+  const windowStart =
+    fetchedRounds && fetchedRounds.length > MAX_ROUND_INFO_ROWS
+      ? fetchedRounds[fetchedRounds.length - MAX_ROUND_INFO_ROWS - 1].createdAt
+      : undefined;
+
+  // StakeReturned events, bounded to the displayed rounds' time window.
+  // Depends on the rounds query so the boundary is known before fetching.
   const {
     data: stakeReturneds,
     isLoading: srLoading,
     error: srError,
   } = useQuery({
-    queryKey: ['pool-stake-returneds', network, poolAddress],
-    enabled: !!poolAddress,
+    queryKey: [
+      'pool-stake-returneds',
+      network,
+      poolAddress,
+      windowStart ?? null,
+    ],
+    enabled: !!poolAddress && fetchedRounds !== undefined,
     refetchInterval: POOL_REFETCH_INTERVAL_MS,
-    queryFn: () => getStakeReturneds(network, poolAddress),
+    queryFn: () =>
+      getStakeReturneds(
+        network,
+        poolAddress,
+        undefined,
+        MAX_STAKE_RETURNED_ROWS,
+        windowStart,
+      ),
   });
 
   // The pool's live cur/prev rounds read from storage — these cover rounds

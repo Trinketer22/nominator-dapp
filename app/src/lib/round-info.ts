@@ -245,12 +245,16 @@ export function aggregateRoundSplit(
 // when a validator's stake is recovered from the elector, carrying that
 // validator's used/returned totals for the just-closed stake. Fetched
 // newest-first so that, if history exceeds maxRows, the recent events are kept;
-// the result is reversed to chronological order for downstream use.
+// the result is reversed to chronological order for downstream use. When
+// `startUtime` (the close time of the round preceding the displayed window) is
+// given, only events strictly after it are returned, so events from rounds
+// older than the displayed window are never fetched nor attributed.
 export async function getStakeReturneds(
   network: Network,
   poolAddress: string,
   validatorAddress?: string,
   maxRows = MAX_STAKE_RETURNED_ROWS,
+  startUtime?: number,
 ): Promise<StakeReturnedEntry[]> {
   const client = getToncenterV3(network);
   const messages = await client.getMessagesAll(
@@ -262,11 +266,15 @@ export async function getStakeReturneds(
       opcode: `0x${STAKE_RETURNED_OPCODE.toString(16)}`,
       sort: 'desc',
       limit: 1000,
+      ...(startUtime !== undefined ? { start_utime: startUtime } : {}),
     },
     maxRows,
   );
   const out: StakeReturnedEntry[] = [];
   for (const msg of messages) {
+    if (startUtime !== undefined && Number(msg.created_at) <= startUtime) {
+      continue;
+    }
     const cell = bodyCell(msg);
     if (!cell) continue;
     try {
