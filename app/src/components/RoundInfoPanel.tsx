@@ -360,13 +360,27 @@ function ValidatorProfitPie({
     const oy2 = cy + r * Math.sin(a1);
     const ix2 = cx + innerR * Math.cos(a1);
     const iy2 = cy + innerR * Math.sin(a1);
-    const d = [
-      `M ${ox} ${oy}`,
-      `A ${r} ${r} 0 ${largeArc} 1 ${ox2} ${oy2}`,
-      `L ${ix2} ${iy2}`,
-      `A ${innerR} ${innerR} 0 ${largeArc} 0 ${ix} ${iy}`,
-      'Z',
-    ].join(' ');
+    // A slice spanning the full circle (single validator) has coincident arc
+    // endpoints — a degenerate arc SVG renders as nothing. Draw it as two
+    // half-arcs instead.
+    const d =
+      s.pct > 0.999
+        ? [
+            `M ${cx} ${cy - r}`,
+            `A ${r} ${r} 0 1 1 ${cx} ${cy + r}`,
+            `A ${r} ${r} 0 1 1 ${cx} ${cy - r}`,
+            `L ${cx} ${cy - innerR}`,
+            `A ${innerR} ${innerR} 0 1 0 ${cx} ${cy + innerR}`,
+            `A ${innerR} ${innerR} 0 1 0 ${cx} ${cy - innerR}`,
+            'Z',
+          ].join(' ')
+        : [
+            `M ${ox} ${oy}`,
+            `A ${r} ${r} 0 ${largeArc} 1 ${ox2} ${oy2}`,
+            `L ${ix2} ${iy2}`,
+            `A ${innerR} ${innerR} 0 ${largeArc} 0 ${ix} ${iy}`,
+            'Z',
+          ].join(' ');
     const labelAngle = (a0 + a1) / 2;
     const labelR = (r + innerR) / 2;
     const lx = cx + labelR * Math.cos(labelAngle);
