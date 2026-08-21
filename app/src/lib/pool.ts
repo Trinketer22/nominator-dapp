@@ -495,6 +495,28 @@ export function validateGlobalGramLimits(
   return null;
 }
 
+// Detects when the pool's stored global validator limits fall outside the
+// current network staking range (config param 17) — e.g. after the network
+// config changed. The contract re-checks the stored limits against the live
+// network config on every NewStake (MinStakeBelowNetworkLimit /
+// MaxStakeAboveNetworkLimit), so in this state validators cannot stake at all
+// until the owner updates the global limits.
+export interface GlobalLimitsMismatch {
+  minBelowNetwork: boolean;
+  maxAboveNetwork: boolean;
+}
+
+export function getGlobalLimitsMismatch(
+  global: { minTonPerValidator: bigint; maxTonPerValidator: bigint },
+  network: { minStake: bigint; maxStake: bigint },
+): GlobalLimitsMismatch | null {
+  const minBelowNetwork = global.minTonPerValidator < network.minStake;
+  const maxAboveNetwork = global.maxTonPerValidator > network.maxStake;
+  return minBelowNetwork || maxAboveNetwork
+    ? { minBelowNetwork, maxAboveNetwork }
+    : null;
+}
+
 // ─── Shared helpers ─────────────────────────────────────────────────────────
 
 function openPool(network: Network, poolAddress: string) {

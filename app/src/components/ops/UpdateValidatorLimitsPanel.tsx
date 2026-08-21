@@ -3,10 +3,11 @@ import { fromNano } from '@ton/core';
 import { useQuery } from '@tanstack/react-query';
 
 import { Button } from '@/components/ui/button';
-import { Field } from '@/components/ui/form';
+import { Field, StatusBox } from '@/components/ui/form';
 import { usePoolOps } from './PoolOpsContext';
 import { useFieldErrors } from './useFieldErrors';
 import {
+  getGlobalLimitsMismatch,
   getLimitsPerValidator,
   getNetworkStakingLimits,
   updateValidatorLimits,
@@ -53,6 +54,20 @@ export function UpdateValidatorLimitsPanel() {
   const networkMinStake = networkLimits?.minStake;
   const networkMaxStake = networkLimits?.maxStake;
 
+  // The pool's current on-chain limits are out of the network range (e.g. the
+  // network config changed since they were set). Until they're updated here,
+  // the contract rejects every validator stake.
+  const limitsMismatch =
+    globalLimits && networkLimits
+      ? getGlobalLimitsMismatch(
+          {
+            minTonPerValidator: globalLimits[0],
+            maxTonPerValidator: globalLimits[1],
+          },
+          networkLimits,
+        )
+      : null;
+
   function onUpdateValidatorLimits() {
     const min = validateGramInput(gMinTon, 'gMinTon', setErr, clearErr);
     if (min === null) return;
@@ -92,6 +107,19 @@ export function UpdateValidatorLimitsPanel() {
       <h2 className="text-[15px] font-semibold">
         Update global validator limits
       </h2>
+      {limitsMismatch && networkMinStake && networkMaxStake && (
+        <StatusBox
+          status="warn"
+          message={
+            <>
+              The current staking limits are outside of the network staking
+              configuration (network range: {fromNano(networkMinStake)} –{' '}
+              {fromNano(networkMaxStake)} GRAM). Adjust the global limits below
+              and submit to continue operation.
+            </>
+          }
+        />
+      )}
       {networkMinStake && networkMaxStake && (
         <p className="text-muted-foreground text-[12px]">
           Network range:{' '}

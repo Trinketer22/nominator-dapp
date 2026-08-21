@@ -12,7 +12,8 @@ import { Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { DeployInitPanel } from './components/DeployInitPanel';
-import { PoolOpsPanel } from './components/PoolOpsPanel';
+import { PoolOpsPanel, type OpTab } from './components/PoolOpsPanel';
+import { PoolLimitsAlert } from './components/PoolLimitsAlert';
 import { PoolInfoPanel } from './components/PoolInfoPanel';
 import { RoundInfoPanel } from './components/RoundInfoPanel';
 import { Field, AddrLink } from './components/ui/form';
@@ -62,6 +63,9 @@ export default function App() {
   const [tc] = useTonConnectUI();
   const { theme, setTheme } = useTheme();
   const [tab, setTab] = useState<MainTab>('deploy');
+  // Operations sub-tab, lifted here so the PoolLimitsAlert banner can jump
+  // straight to the Global Validator Limits form.
+  const [opsTab, setOpsTab] = useState<OpTab>('add-funds');
   const [poolAddr, setPoolAddrRaw] = useState(
     () => localStorage.getItem('nominator-pool:address') ?? '',
   );
@@ -218,6 +222,19 @@ export default function App() {
           )}
         </div>
 
+        {/* Warns when the pool's global validator limits no longer fit the
+            network staking range (config param 17) — staking is blocked until
+            the owner updates the limits. */}
+        {poolAddrValid && (
+          <PoolLimitsAlert
+            poolAddress={poolAddr}
+            onOpenGlobalLimits={() => {
+              setOpsTab('update-validator-limits');
+              setTab('operations');
+            }}
+          />
+        )}
+
         {/* ─── Tabs ─── */}
         <div className="flex gap-1.5">
           {(
@@ -246,7 +263,11 @@ export default function App() {
 
         {tab === 'operations' &&
           (poolAddrValid ? (
-            <PoolOpsPanel poolAddress={poolAddr} />
+            <PoolOpsPanel
+              poolAddress={poolAddr}
+              tab={opsTab}
+              onTabChange={setOpsTab}
+            />
           ) : (
             <PanelPlaceholder poolAddr={poolAddr} />
           ))}

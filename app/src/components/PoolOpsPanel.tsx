@@ -1,5 +1,3 @@
-import { useState } from 'react';
-
 import { AddrLink } from '@/components/ui/form';
 import { PoolOpsProvider, usePoolOps } from './ops/PoolOpsContext';
 import { AddFundsPanel } from './ops/AddFundsPanel';
@@ -13,7 +11,7 @@ import { UpdateVsetPanel } from './ops/UpdateVsetPanel';
 import { UpdateNominatorLimitsPanel } from './ops/UpdateNominatorLimitsPanel';
 import { UpdateWhitelistPanel } from './ops/UpdateWhitelistPanel';
 
-type OpTab =
+export type OpTab =
   | 'add-funds'
   | 'add-validator'
   | 'remove-validator'
@@ -53,12 +51,19 @@ const TAB_GROUPS: { group: string; tabs: { id: OpTab; label: string }[] }[] = [
   },
 ];
 
-// Renders the tab bar and the active sub-panel. Each sub-panel is mounted only
-// when its tab is active, so its local state (selected validator, form inputs,
-// field errors) is discarded on tab switch — no leakage between panels.
-function PoolOpsTabs() {
+// Renders the tab bar and the active sub-panel. The sub-tab is owned by the
+// caller so other UI (e.g. the PoolLimitsAlert banner) can focus a specific
+// panel. Each sub-panel is mounted only when its tab is active, so its local
+// state (selected validator, form inputs, field errors) is discarded on tab
+// switch — no leakage between panels.
+function PoolOpsTabs({
+  tab,
+  onTabChange,
+}: {
+  tab: OpTab;
+  onTabChange: (tab: OpTab) => void;
+}) {
   const { network, poolAddress } = usePoolOps();
-  const [tab, setTab] = useState<OpTab>('add-funds');
 
   return (
     <div className="w-full max-w-xl flex flex-col gap-4 text-left">
@@ -72,7 +77,7 @@ function PoolOpsTabs() {
               {group.tabs.map((t) => (
                 <button
                   key={t.id}
-                  onClick={() => setTab(t.id)}
+                  onClick={() => onTabChange(t.id)}
                   className={
                     tab === t.id
                       ? 'rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-[12px] font-medium'
@@ -110,10 +115,18 @@ function PoolOpsTabs() {
   );
 }
 
-export function PoolOpsPanel({ poolAddress }: { poolAddress: string }) {
+export function PoolOpsPanel({
+  poolAddress,
+  tab,
+  onTabChange,
+}: {
+  poolAddress: string;
+  tab: OpTab;
+  onTabChange: (tab: OpTab) => void;
+}) {
   return (
     <PoolOpsProvider poolAddress={poolAddress}>
-      <PoolOpsTabs />
+      <PoolOpsTabs tab={tab} onTabChange={onTabChange} />
     </PoolOpsProvider>
   );
 }
