@@ -1,11 +1,10 @@
 import { Fragment, useMemo, useState } from 'react';
 import { fromNano } from '@ton/core';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 
-import { Button } from '@/components/ui/button';
 import { AddrLink, DataCard } from '@/components/ui/form';
 import { useRouter } from '@/lib/router';
-import { invalidatePoolQueries } from '@/lib/query-keys';
+import { POOL_REFETCH_INTERVAL_MS } from '@/lib/query-keys';
 import { fmtAddr, fmtAddrCompact, getPoolOwner } from '@/lib/pool';
 import {
   aggregateRoundSplit,
@@ -436,7 +435,6 @@ function ValidatorProfitPie({
 
 export function RoundInfoPanel({ poolAddress }: { poolAddress: string }) {
   const { network } = useRouter();
-  const queryClient = useQueryClient();
   const [selectedValidator, setSelectedValidator] = useState('');
   const [expandedRound, setExpandedRound] = useState<string | null>(null);
 
@@ -458,6 +456,7 @@ export function RoundInfoPanel({ poolAddress }: { poolAddress: string }) {
   } = useQuery({
     queryKey: ['pool-round-infos', network, poolAddress],
     enabled: !!poolAddress && !!ownerRaw,
+    refetchInterval: POOL_REFETCH_INTERVAL_MS,
     queryFn: () => getRoundInfos(network, poolAddress, ownerRaw),
   });
 
@@ -468,6 +467,7 @@ export function RoundInfoPanel({ poolAddress }: { poolAddress: string }) {
   } = useQuery({
     queryKey: ['pool-stake-returneds', network, poolAddress],
     enabled: !!poolAddress,
+    refetchInterval: POOL_REFETCH_INTERVAL_MS,
     queryFn: () => getStakeReturneds(network, poolAddress),
   });
 
@@ -477,6 +477,7 @@ export function RoundInfoPanel({ poolAddress }: { poolAddress: string }) {
   const { data: liveRounds } = useQuery({
     queryKey: ['pool-live-rounds', network, poolAddress],
     enabled: !!poolAddress,
+    refetchInterval: POOL_REFETCH_INTERVAL_MS,
     queryFn: () => getLiveRounds(network, poolAddress),
   });
 
@@ -532,8 +533,6 @@ export function RoundInfoPanel({ poolAddress }: { poolAddress: string }) {
     );
   }
 
-  const loading = riLoading || srLoading;
-
   return (
     <div className="w-full max-w-3xl flex flex-col gap-4 text-left">
       {expandedRound && (
@@ -543,15 +542,7 @@ export function RoundInfoPanel({ poolAddress }: { poolAddress: string }) {
           aria-hidden
         />
       )}
-      <div className="flex items-center gap-3">
-        <Button
-          onClick={() => {
-            invalidatePoolQueries(queryClient, network, poolAddress);
-          }}
-          disabled={loading}
-        >
-          {loading ? 'Loading...' : 'Refresh'}
-        </Button>
+      <div>
         <span className="text-muted-foreground text-[12px]">
           Stats are indexed from the pool's on-chain log messages
           (RoundInfoMessage &amp; StakeReturned) via toncenter v3.

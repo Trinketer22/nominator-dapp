@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { Address, fromNano } from '@ton/core';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 
-import { Button } from '@/components/ui/button';
 import { Field, AddrLink } from '@/components/ui/form';
 import { useRouter } from '@/lib/router';
-import { invalidatePoolQueries } from '@/lib/query-keys';
+import { POOL_REFETCH_INTERVAL_MS } from '@/lib/query-keys';
 import {
   SHARE_BASE,
   fmtAddr,
@@ -48,13 +47,13 @@ function AddrRow({
 
 export function PoolInfoPanel({ poolAddress }: { poolAddress: string }) {
   const { network } = useRouter();
-  const queryClient = useQueryClient();
   const [selectedValidator, setSelectedValidator] = useState('');
   const [nominatorAddr, setNominatorAddr] = useState('');
 
-  const { data, isLoading, error } = useQuery({
+  const { data, error } = useQuery({
     queryKey: ['pool-info', network, poolAddress],
     enabled: !!poolAddress,
+    refetchInterval: POOL_REFETCH_INTERVAL_MS,
     queryFn: async () => {
       const [poolData, limits, balance, minStake, invariants] =
         await Promise.all([
@@ -74,6 +73,7 @@ export function PoolInfoPanel({ poolAddress }: { poolAddress: string }) {
   const { data: validatorsData } = useQuery({
     queryKey: ['pool-validators', network, poolAddress],
     enabled: !!poolAddress,
+    refetchInterval: POOL_REFETCH_INTERVAL_MS,
     queryFn: () => getValidators(network, poolAddress),
   });
   const validators = validatorsData?.validators;
@@ -81,8 +81,8 @@ export function PoolInfoPanel({ poolAddress }: { poolAddress: string }) {
   const selectedVal = validators?.find((v) => v.address === selectedValidator);
 
   // Fetch detailed validator info (incl. projected stakeable amount) for the
-  // selected validator. get_validator_info may advance round state like a real
-  // UpdateVset message, so it is only called when a validator is selected.
+  // selected validator. The getter simulates a round rotation to project the
+  // stakeable amount but, being a get-method, never mutates contract state.
   const {
     data: validatorInfo,
     isLoading: viLoading,
@@ -90,6 +90,7 @@ export function PoolInfoPanel({ poolAddress }: { poolAddress: string }) {
   } = useQuery({
     queryKey: ['pool-validator-info', network, poolAddress, selectedValidator],
     enabled: !!poolAddress && !!selectedValidator,
+    refetchInterval: POOL_REFETCH_INTERVAL_MS,
     queryFn: () => getValidatorInfo(network, poolAddress, selectedValidator),
   });
 
@@ -125,17 +126,6 @@ export function PoolInfoPanel({ poolAddress }: { poolAddress: string }) {
 
   return (
     <div className="w-full max-w-xl flex flex-col gap-4 text-left">
-      <div className="flex items-center gap-3">
-        <Button
-          onClick={() => {
-            invalidatePoolQueries(queryClient, network, poolAddress);
-          }}
-          disabled={isLoading}
-        >
-          {isLoading ? 'Loading...' : 'Refresh'}
-        </Button>
-      </div>
-
       {error && (
         <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-[13px]">
           Failed to load pool data: {(error as Error).message}

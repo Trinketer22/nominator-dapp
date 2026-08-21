@@ -1,6 +1,10 @@
 // Shared react-query keys for pool data. Both PoolInfoPanel and PoolOpsPanel
 // use these so they share the same cache, and operations can invalidate them
 // after a transaction to force a refetch.
+// Auto-refresh cadence for read-only pool data panels (Pool Info, Round Info).
+// Owner operations still invalidate immediately after each transaction.
+export const POOL_REFETCH_INTERVAL_MS = 5 * 60_000;
+
 export const poolQueryKeys = {
   info: (network: string, poolAddress: string) =>
     ['pool-info', network, poolAddress] as const,
