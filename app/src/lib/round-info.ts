@@ -12,11 +12,12 @@ import type { Network } from './router';
 export const ROUND_INFO_OPCODE = 0xe4649054; // RoundInfoMessage
 export const STAKE_RETURNED_OPCODE = 0xd6d1ff31; // StakeReturned
 
-// How deep the round history goes: ~100 rounds (~2 months) is far deeper than
-// anyone needs. One RoundInfoMessage per round; StakeReturned is one per
-// validator recovery (max 32 validators per round, plus rotation re-stakes).
-export const MAX_ROUND_INFO_ROWS = 100;
-export const MAX_STAKE_RETURNED_ROWS = 3200;
+// Round history is loaded one page at a time (the panel's "Load older rounds"
+// grows the window); each page holds this many rounds. One RoundInfoMessage
+// per round; StakeReturned is one per validator recovery — budget up to 32
+// (the max validator count) per round.
+export const ROUND_INFO_PAGE_SIZE = 100;
+export const STAKE_RETURNED_PER_ROUND = 32;
 
 export interface RoundInfoEntry {
   roundIndex: bigint;
@@ -70,45 +71,88 @@ function bodyCell(msg: V3Message): Cell | null {
 // Fetch RoundInfoMessage events sent by the pool to the owner. These are
 // emitted by Storage.finalizeRound (contracts/Pool.tolk) when a round rotates,
 // one per completed round, carrying the round's aggregate used/returned totals.
-// Fetched newest-first so that, if history exceeds maxRows, the recent events
-// are kept; the result is reversed to chronological order for downstream use.
+// The history is fetched newest-first in keyset-paginated batches: toncenter's
+// `end_lt` filter is inclusive, so every batch after the first re-fetches the
+// previous batch's oldest message and it is deduped by roundIndex — the overlap
+// keeps the history gapless even if new rounds rotate in between batches. Each
+// batch requests one row more than needed so `roundInfoWindow` can detect
+// whether older history exists. Returns chronological order.
 export async function getRoundInfos(
   network: Network,
   poolAddress: string,
   ownerAddress: string,
-  maxRows = MAX_ROUND_INFO_ROWS,
+  rounds = ROUND_INFO_PAGE_SIZE,
 ): Promise<RoundInfoEntry[]> {
   const client = getToncenterV3(network);
-  const messages = await client.getMessagesAll(
-    {
-      source: toRawAddress(poolAddress),
-      destination: toRawAddress(ownerAddress),
-      opcode: `0x${ROUND_INFO_OPCODE.toString(16)}`,
-      sort: 'desc',
-      limit: 1000,
-    },
-    maxRows,
-  );
-  const out: RoundInfoEntry[] = [];
-  for (const msg of messages) {
-    const cell = bodyCell(msg);
-    if (!cell) continue;
-    try {
-      const parsed = RoundInfoMessage.fromSlice(cell.beginParse());
-      out.push({
-        roundIndex: parsed.info.roundIndex,
-        used: parsed.info.used,
-        returned: parsed.info.returned,
-        queryId: parsed.queryId,
-        createdAt: Number(msg.created_at),
-        lt: BigInt(msg.created_lt),
-        txHash: msg.in_msg_tx_hash ?? msg.out_msg_tx_hash ?? msg.hash,
-      });
-    } catch {
-      // Skip malformed/bounced bodies silently — they cannot contribute stats.
+  const out: RoundInfoEntry[] = []; // newest-first; reversed at the end
+  const seen = new Set<bigint>();
+  let endLt: string | undefined; // inclusive created_lt cursor
+  while (out.length < rounds) {
+    const batch = Math.min(rounds - out.length, ROUND_INFO_PAGE_SIZE) + 1;
+    const messages = await client.getMessagesAll(
+      {
+        source: toRawAddress(poolAddress),
+        destination: toRawAddress(ownerAddress),
+        opcode: `0x${ROUND_INFO_OPCODE.toString(16)}`,
+        sort: 'desc',
+        limit: batch,
+        ...(endLt !== undefined ? { end_lt: endLt } : {}),
+      },
+      batch,
+    );
+    const before = out.length;
+    for (const msg of messages) {
+      const cell = bodyCell(msg);
+      if (!cell) continue;
+      try {
+        const parsed = RoundInfoMessage.fromSlice(cell.beginParse());
+        if (seen.has(parsed.info.roundIndex)) continue; // batch boundary dup
+        seen.add(parsed.info.roundIndex);
+        out.push({
+          roundIndex: parsed.info.roundIndex,
+          used: parsed.info.used,
+          returned: parsed.info.returned,
+          queryId: parsed.queryId,
+          createdAt: Number(msg.created_at),
+          lt: BigInt(msg.created_lt),
+          txHash: msg.in_msg_tx_hash ?? msg.out_msg_tx_hash ?? msg.hash,
+        });
+      } catch {
+        // Skip malformed/bounced bodies silently — they cannot contribute stats.
+      }
     }
+    if (messages.length < batch) break; // short page: history exhausted
+    // Cursor at the oldest fetched message (re-fetched and deduped next batch).
+    endLt = messages[messages.length - 1].created_lt;
+    if (out.length === before) break; // safety: batch made no progress
   }
-  return out.reverse();
+  return out.slice(0, rounds).reverse();
+}
+
+// A displayed window of round history, built from a fetch of up to
+// `maxRounds + 1` rounds. The extra (oldest) round is not displayed; its close
+// time becomes `windowStart` — StakeReturned events strictly after it belong
+// to the displayed window, so events from older rounds are never fetched nor
+// mis-attributed to the oldest displayed round. `hasMore` reports whether
+// older finalized rounds exist beyond the window.
+export interface RoundInfoWindow {
+  rounds: RoundInfoEntry[]; // chronological, the displayed window
+  windowStart?: number;
+  hasMore: boolean;
+}
+
+export function roundInfoWindow(
+  fetched: RoundInfoEntry[],
+  maxRounds: number,
+): RoundInfoWindow {
+  const clipped = fetched.length > maxRounds;
+  return {
+    rounds: clipped ? fetched.slice(fetched.length - maxRounds) : fetched,
+    windowStart: clipped
+      ? fetched[fetched.length - maxRounds - 1].createdAt
+      : undefined,
+    hasMore: clipped,
+  };
 }
 
 // Read the pool's live cur/prev rounds directly from storage. These are the
@@ -253,7 +297,7 @@ export async function getStakeReturneds(
   network: Network,
   poolAddress: string,
   validatorAddress?: string,
-  maxRows = MAX_STAKE_RETURNED_ROWS,
+  maxRows = STAKE_RETURNED_PER_ROUND * ROUND_INFO_PAGE_SIZE,
   startUtime?: number,
 ): Promise<StakeReturnedEntry[]> {
   const client = getToncenterV3(network);

@@ -53,8 +53,10 @@ export interface GetMessagesParams {
   body_hash?: string;
   start_utime?: number;
   end_utime?: number;
-  start_lt?: number;
-  end_lt?: number;
+  // LTs exceed Number.MAX_SAFE_INTEGER, so pass the string form (as returned
+  // in V3Message.created_lt) for exact filtering.
+  start_lt?: number | string;
+  end_lt?: number | string;
   direction?: 'in' | 'out';
   exclude_externals?: boolean;
   only_externals?: boolean;

@@ -3,6 +3,7 @@ import { fromNano } from '@ton/core';
 import { useQuery } from '@tanstack/react-query';
 
 import { AddrLink, DataCard } from '@/components/ui/form';
+import { Button } from '@/components/ui/button';
 import { useRouter } from '@/lib/router';
 import { POOL_REFETCH_INTERVAL_MS } from '@/lib/query-keys';
 import { fmtAddr, fmtAddrCompact, getPoolOwner } from '@/lib/pool';
@@ -14,8 +15,9 @@ import {
   getRoundInfos,
   getStakeReturneds,
   mergeRoundInfos,
-  MAX_ROUND_INFO_ROWS,
-  MAX_STAKE_RETURNED_ROWS,
+  roundInfoWindow,
+  ROUND_INFO_PAGE_SIZE,
+  STAKE_RETURNED_PER_ROUND,
   type RoundInfoEntry,
   type RoundValidatorSplit,
   type StakeReturnedEntry,
@@ -454,6 +456,18 @@ export function RoundInfoPanel({ poolAddress }: { poolAddress: string }) {
   const [selectedValidator, setSelectedValidator] = useState('');
   const [expandedRound, setExpandedRound] = useState<string | null>(null);
 
+  // Round-history paging: how many pages of ROUND_INFO_PAGE_SIZE rounds are
+  // loaded. "Load older rounds" grows this; it resets when the pool or network
+  // changes so every pool starts from its newest page.
+  const [roundPages, setRoundPages] = useState(1);
+  const poolScope = `${network}:${poolAddress}`;
+  const [lastPoolScope, setLastPoolScope] = useState(poolScope);
+  if (lastPoolScope !== poolScope) {
+    setLastPoolScope(poolScope);
+    setRoundPages(1);
+  }
+  const displayCount = roundPages * ROUND_INFO_PAGE_SIZE;
+
   // The owner address is required to scope the RoundInfoMessage query (the pool
   // sends RoundInfoMessage to the owner). StakeReturned goes to each validator,
   // so it is scoped only by the pool as source.
@@ -465,39 +479,50 @@ export function RoundInfoPanel({ poolAddress }: { poolAddress: string }) {
 
   const ownerRaw = owner ? owner.toRawString() : '';
 
-  // Fetch one round more than displayed. If older history exists, the first
-  // dropped round's close time bounds the StakeReturned query, so events from
-  // rounds outside the displayed window are never fetched (and can never be
-  // mis-attributed to the oldest displayed round).
+  // Paged round history: the query key includes the page count, so "Load older
+  // rounds" refetches a deeper window (getRoundInfos keyset-paginates by
+  // message lt under the hood). One round more than displayed is fetched; if
+  // older history exists, the first dropped round's close time bounds the
+  // StakeReturned query, so events from rounds outside the displayed window
+  // are never fetched (and can never be mis-attributed to the oldest displayed
+  // round). The previous window is kept as placeholder data while a deeper
+  // page loads — but never across a pool/network switch.
   const {
-    data: fetchedRounds,
+    data: roundsWindow,
+    isFetching: roundsFetching,
     isLoading: riLoading,
     error: riError,
   } = useQuery({
-    queryKey: ['pool-round-infos', network, poolAddress],
+    queryKey: ['pool-round-infos', network, poolAddress, roundPages],
     enabled: !!poolAddress && !!ownerRaw,
     refetchInterval: POOL_REFETCH_INTERVAL_MS,
-    queryFn: () =>
-      getRoundInfos(network, poolAddress, ownerRaw, MAX_ROUND_INFO_ROWS + 1),
+    placeholderData: (prev, prevQuery) =>
+      prevQuery &&
+      prevQuery.queryKey[1] === network &&
+      prevQuery.queryKey[2] === poolAddress
+        ? prev
+        : undefined,
+    queryFn: async () =>
+      roundInfoWindow(
+        await getRoundInfos(network, poolAddress, ownerRaw, displayCount + 1),
+        displayCount,
+      ),
   });
 
-  // The displayed/stat window: the newest MAX_ROUND_INFO_ROWS rounds.
-  const roundInfos = useMemo(
-    () =>
-      fetchedRounds && fetchedRounds.length > MAX_ROUND_INFO_ROWS
-        ? fetchedRounds.slice(fetchedRounds.length - MAX_ROUND_INFO_ROWS)
-        : fetchedRounds,
-    [fetchedRounds],
-  );
-  // Events strictly after this time belong to the displayed window. Undefined
-  // when the whole history fits (fewer rounds than the window).
-  const windowStart =
-    fetchedRounds && fetchedRounds.length > MAX_ROUND_INFO_ROWS
-      ? fetchedRounds[fetchedRounds.length - MAX_ROUND_INFO_ROWS - 1].createdAt
-      : undefined;
+  // The displayed/stat window plus the StakeReturned query boundary. Undefined
+  // `windowStart` means the whole history fits (fewer rounds than the window).
+  const roundInfos = roundsWindow?.rounds;
+  const windowStart = roundsWindow?.windowStart;
+  const hasMoreRounds = roundsWindow?.hasMore ?? false;
 
   // StakeReturned events, bounded to the displayed rounds' time window.
-  // Depends on the rounds query so the boundary is known before fetching.
+  // Depends on the rounds query so the boundary is known before fetching. The
+  // row budget grows with the loaded pages (up to 32 validator recoveries per
+  // round), never below the original 100-round budget — emergency recovery of
+  // many missed rounds can burst many events per round.
+  const stakeRows =
+    Math.max(roundInfos?.length ?? 0, ROUND_INFO_PAGE_SIZE) *
+    STAKE_RETURNED_PER_ROUND;
   const {
     data: stakeReturneds,
     isLoading: srLoading,
@@ -509,14 +534,14 @@ export function RoundInfoPanel({ poolAddress }: { poolAddress: string }) {
       poolAddress,
       windowStart ?? null,
     ],
-    enabled: !!poolAddress && fetchedRounds !== undefined,
+    enabled: !!poolAddress && roundsWindow !== undefined,
     refetchInterval: POOL_REFETCH_INTERVAL_MS,
     queryFn: () =>
       getStakeReturneds(
         network,
         poolAddress,
         undefined,
-        MAX_STAKE_RETURNED_ROWS,
+        stakeRows,
         windowStart,
       ),
   });
@@ -635,7 +660,12 @@ export function RoundInfoPanel({ poolAddress }: { poolAddress: string }) {
             </span>
             <span>Live rounds excluded (profit not yet settled)</span>
           </div>
-          <RoundsBarChart rounds={allRounds} />
+          {allRounds.length > ROUND_INFO_PAGE_SIZE && (
+            <p className="text-muted-foreground text-[12px]">
+              Chart shows the newest {ROUND_INFO_PAGE_SIZE} loaded rounds.
+            </p>
+          )}
+          <RoundsBarChart rounds={allRounds.slice(0, ROUND_INFO_PAGE_SIZE)} />
         </section>
       )}
 
@@ -888,6 +918,29 @@ export function RoundInfoPanel({ poolAddress }: { poolAddress: string }) {
                   </Fragment>
                 );
               })}
+            </div>
+
+            {/* Older-history paging */}
+            <div className="flex flex-col items-center gap-1.5">
+              {hasMoreRounds ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={roundsFetching}
+                  onClick={() => setRoundPages((p) => p + 1)}
+                >
+                  {roundsFetching ? 'Loading...' : 'Load older rounds'}
+                </Button>
+              ) : (
+                <span className="text-muted-foreground text-[12px]">
+                  All {roundInfos?.length ?? 0} indexed rounds loaded.
+                </span>
+              )}
+              {hasMoreRounds && (
+                <span className="text-muted-foreground text-[12px]">
+                  Showing the newest {roundInfos?.length ?? 0} rounds.
+                </span>
+              )}
             </div>
           </>
         )}
