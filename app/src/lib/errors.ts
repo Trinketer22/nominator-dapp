@@ -42,6 +42,7 @@ export const POOL_ERROR_CODES: Record<number, string> = {
   400: 'Too many nominators',
   401: 'Too many validators',
   402: 'Nominators map is too deep',
+  403: 'Withdrawal must be pending (internal consistency check failed)',
   500: 'Invalid new-stake message body',
   501: 'Round is too early',
   502: 'Recovery time is too early',
@@ -78,10 +79,16 @@ export const OPCODE_NAMES: Record<number, string> = {
   0x11c31b99: 'Owner withdrawal',
   0xf36da828: 'Update limits',
   0xc2d9e5ad: 'Update nominators whitelist',
+  0xa3210d03: 'Evict nominator',
   0x4e73744b: 'New stake',
   0x47657424: 'Recover stake',
   0x47657442: 'Recover stake (unrestricted)',
   0x00000007: 'Update vset',
+  // RefundContext ops reported on success paths. A successful EvictNominator
+  // is confirmed with the WithdrawalMessage op and errorCode 0, since the
+  // nominator's whole share is queued as a pending withdrawal.
+  0x64: 'Deposit',
+  0x77: 'Withdrawal (pending)',
 };
 
 export function describePoolError(code: number): string {

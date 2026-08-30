@@ -10,6 +10,7 @@ import { RecoverStakePanel } from './ops/RecoverStakePanel';
 import { UpdateVsetPanel } from './ops/UpdateVsetPanel';
 import { UpdateNominatorLimitsPanel } from './ops/UpdateNominatorLimitsPanel';
 import { UpdateWhitelistPanel } from './ops/UpdateWhitelistPanel';
+import { EvictNominatorPanel } from './ops/EvictNominatorPanel';
 
 export type OpTab =
   | 'add-funds'
@@ -21,6 +22,7 @@ export type OpTab =
   | 'update-nominator-limits'
   | 'update-validator-limit'
   | 'update-whitelist'
+  | 'evict-nominator'
   | 'update-vset';
 
 const TAB_GROUPS: { group: string; tabs: { id: OpTab; label: string }[] }[] = [
@@ -47,6 +49,7 @@ const TAB_GROUPS: { group: string; tabs: { id: OpTab; label: string }[] }[] = [
     tabs: [
       { id: 'update-nominator-limits', label: 'Nominator Limits' },
       { id: 'update-whitelist', label: 'Nominator Whitelist' },
+      { id: 'evict-nominator', label: 'Evict Nominator' },
     ],
   },
 ];
@@ -103,6 +106,7 @@ function PoolOpsTabs({
         {tab === 'recover-stake' && <RecoverStakePanel />}
         {tab === 'update-vset' && <UpdateVsetPanel />}
         {tab === 'update-whitelist' && <UpdateWhitelistPanel />}
+        {tab === 'evict-nominator' && <EvictNominatorPanel />}
       </section>
 
       <div className="text-muted-foreground text-[12px] flex flex-col gap-1">

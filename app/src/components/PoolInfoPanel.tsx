@@ -14,6 +14,7 @@ import {
   getPoolBalance,
   getPoolData,
   getPoolInvariants,
+  getSharesInfo,
   getValidatorInfo,
   getValidators,
   roundParityLabel,
@@ -55,15 +56,16 @@ export function PoolInfoPanel({ poolAddress }: { poolAddress: string }) {
     enabled: !!poolAddress,
     refetchInterval: POOL_REFETCH_INTERVAL_MS,
     queryFn: async () => {
-      const [poolData, limits, balance, minStake, invariants] =
+      const [poolData, limits, balance, minStake, invariants, sharesInfo] =
         await Promise.all([
           getPoolData(network, poolAddress),
           getLimitsPerValidator(network, poolAddress),
           getPoolBalance(network, poolAddress),
           getNominatorMinimalStake(network, poolAddress),
           getPoolInvariants(network, poolAddress).catch(() => null),
+          getSharesInfo(network, poolAddress),
         ]);
-      return { poolData, limits, balance, minStake, invariants };
+      return { poolData, limits, balance, minStake, invariants, sharesInfo };
     },
   });
 
@@ -170,6 +172,14 @@ export function PoolInfoPanel({ poolAddress }: { poolAddress: string }) {
             <Row
               label="Pending withdrawals"
               value={`${fromNano(data.poolData.pendingWithdrawals)} GRAM`}
+            />
+            <Row
+              label="Owner share value"
+              value={`${fromNano(data.sharesInfo.ownerShareValue)} GRAM`}
+            />
+            <Row
+              label="Liquid owner share"
+              value={`${fromNano(data.sharesInfo.liquidOwnerShare)} GRAM`}
             />
             <Row
               label="Max nominators"

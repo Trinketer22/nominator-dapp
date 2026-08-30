@@ -22,6 +22,7 @@ import {
   type ValidatorLimit,
   type Storage,
   type GetValidatorInfo,
+  type GetSharesInfoResult,
   type ValidatorUsageStats,
 } from '@wrappers/Pool.gen';
 
@@ -647,44 +648,31 @@ export async function getNominatorMinimalStake(
   return openPool(network, poolAddress).getNominatorMinimalStake();
 }
 
-// Computes the theoretical max owner-withdrawable amount, matching the logic
-// in contracts/owner.tolk's OwnerWithdrawal handler:
-//   availableBalance = getOriginalBalance() - value - pendingDeposits - POOL_MIN_STORAGE
 // Computes both the withdrawable amount and the total projected owner share,
-// matching the contract's OwnerWithdrawal handler:
-//   getOriginalBalance() = onchain_balance + msgValue
-//   availableBalance = getOriginalBalance() - value - pendingDeposits - POOL_MIN_STORAGE
-//   Since value = msgValue, they cancel:
-//   availableBalance = onchain_balance - pendingDeposits - POOL_MIN_STORAGE
-//   totalBalance = availableBalance + stakeUsed
-//   ownerShare = totalBalance - nominatorsAmount - maxPunishment * activeSlots
-//   withdrawable = min(ownerShare, availableBalance)
+// using the contract's get_shares_info getter (see contracts/Pool.tolk):
+//   ownerShareValue = total owner equity after nominator liabilities,
+//     pending payouts, storage reserve and punishment reserves
+//   liquidOwnerShare = min(ownerShare, availableBalance - pendingWithdrawals
+//     estimate), zero while the pool is halted or insolvent — exactly what the
+//     OwnerWithdrawal handler allows the owner to withdraw
 export interface OwnerShareInfo {
-  available: bigint; // min(ownerShare, availableBalance) — what can be withdrawn now
+  available: bigint; // liquidOwnerShare — what can be withdrawn now
   ownerShare: bigint; // total owner share (may exceed available if stake is locked)
+}
+
+export async function getSharesInfo(
+  network: Network,
+  poolAddress: string,
+): Promise<GetSharesInfoResult> {
+  return openPool(network, poolAddress).getSharesInfo();
 }
 
 export async function getOwnerShareInfo(
   network: Network,
   poolAddress: string,
 ): Promise<OwnerShareInfo> {
-  const opened = openPool(network, poolAddress);
-  const poolData = await opened.getPoolData();
-  const validators = poolData.validators.ref;
-  const [balance, maxPunishment] = await Promise.all([
-    getPoolBalance(network, poolAddress),
-    opened.getMaxPunishment(validators.minTonPerValidator),
-  ]);
-  const availableBalance =
-    balance - POOL_MIN_STORAGE - poolData.pendingDeposits;
-  const fullBalance = availableBalance + validators.stakeUsed;
-  const ownerShare =
-    fullBalance -
-    poolData.nominatorsAmount -
-    maxPunishment * validators.activeSlots;
-  const available =
-    availableBalance < ownerShare ? availableBalance : ownerShare;
-  return { available, ownerShare };
+  const info = await getSharesInfo(network, poolAddress);
+  return { available: info.liquidOwnerShare, ownerShare: info.ownerShareValue };
 }
 
 export async function getMaxOwnerShare(
@@ -992,6 +980,32 @@ export async function updateNominatorsWhitelist(
     {
       queryId: params.queryId ?? 1n,
       whitelist: dict,
+    },
+  );
+}
+
+// EvictNominator is an owner-only operation that forces a nominator to exit
+// the pool at the end of the round: their whole share is queued as a pending
+// withdrawal and paid out via the pending payout chain (see
+// contracts/owner.tolk's EvictNominator handler).
+export interface EvictNominatorParams {
+  poolAddress: string;
+  nominator: string;
+  value: bigint;
+  queryId?: bigint;
+}
+
+export async function evictNominator(
+  network: Network,
+  via: Sender,
+  params: EvictNominatorParams,
+): Promise<void> {
+  await openPool(network, params.poolAddress).sendEvictNominator(
+    via,
+    params.value,
+    {
+      queryId: params.queryId ?? 1n,
+      address: Address.parse(params.nominator),
     },
   );
 }
