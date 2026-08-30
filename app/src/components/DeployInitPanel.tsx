@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Field, AddrLink } from '@/components/ui/form';
 import { ShareInput } from '@/components/ui/ShareInput';
 import { ValidatorLimitInput } from '@/components/ui/ValidatorLimitInput';
+import { WhitelistInput } from '@/components/ui/WhitelistInput';
 import { RoundAllowanceSelect } from '@/components/ui/RoundAllowanceSelect';
 import { useToast } from '@/components/ui/toast';
 import { useRouter } from '@/lib/router';
@@ -84,6 +85,9 @@ export function DeployInitPanel({
   const [maxNominators, setMaxNominators] = useState('1023');
   const [minStake, setMinStake] = useState('1000');
   const [minWithdrawableRewards, setMinWithdrawableRewards] = useState('1');
+  // Nominator whitelist applied at init — the contract accepts it via
+  // NominatorsSettings in InitPoolMessage. Empty (default) = open to all.
+  const [whitelistEntries, setWhitelistEntries] = useState<string[]>([]);
   const [initValue, setInitValue] = useState('250');
 
   // first validator limit (applied at init time)
@@ -286,6 +290,7 @@ export function DeployInitPanel({
       maxNominators: maxNominatorsVal,
       minStake: minStakeVal,
       minWithdrawableRewards: minWithdrawableRewardsVal,
+      whitelist: whitelistEntries,
       value: initValueVal,
       limit,
     };
@@ -518,6 +523,12 @@ export function DeployInitPanel({
             error={fieldErrors.minWithdrawableRewards}
           />
         </div>
+        <WhitelistInput
+          entries={whitelistEntries}
+          onEntriesChange={setWhitelistEntries}
+          network={network}
+          label="Nominator whitelist (optional)"
+        />
         <div className="grid grid-cols-2 gap-3">
           <Field
             label="Init value (GRAM, covers proxies + reserve)"

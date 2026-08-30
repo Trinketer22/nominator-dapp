@@ -266,8 +266,26 @@ export interface PoolInitParams {
   maxNominators: number;
   minStake: bigint;
   minWithdrawableRewards: bigint;
+  // Nominator whitelist applied at init (empty = open to all). The contract
+  // accepts it via NominatorsSettings in InitPoolMessage.
+  whitelist: string[];
   value: bigint;
   limit: ValidatorLimit | null;
+}
+
+// Builds the on-chain map<address, bool> from normalized address strings.
+// Every entry maps to true — presence in the dict is what grants deposit.
+export function buildWhitelistDict(
+  entries: Iterable<string>,
+): Dictionary<Address, boolean> {
+  let dict = Dictionary.empty(
+    Dictionary.Keys.Address(),
+    Dictionary.Values.Bool(),
+  );
+  for (const addr of entries) {
+    dict = dict.set(Address.parse(addr), true);
+  }
+  return dict;
 }
 
 // Builds the pool from storage (owner + poolId) so the contract carries its
@@ -297,10 +315,7 @@ export async function deployAndInitPool(
         maxNominators: BigInt(init.maxNominators),
         minStake: init.minStake,
         minWithdrawableRewards: init.minWithdrawableRewards,
-        whitelist: Dictionary.empty(
-          Dictionary.Keys.Address(),
-          Dictionary.Values.Bool(),
-        ),
+        whitelist: buildWhitelistDict(init.whitelist),
       }),
     },
   });
@@ -330,10 +345,7 @@ export async function initPool(
         maxNominators: BigInt(params.maxNominators),
         minStake: params.minStake,
         minWithdrawableRewards: params.minWithdrawableRewards,
-        whitelist: Dictionary.empty(
-          Dictionary.Keys.Address(),
-          Dictionary.Values.Bool(),
-        ),
+        whitelist: buildWhitelistDict(params.whitelist),
       }),
     },
   });
@@ -967,19 +979,12 @@ export async function updateNominatorsWhitelist(
   via: Sender,
   params: UpdateWhitelistParams,
 ): Promise<void> {
-  let dict = Dictionary.empty(
-    Dictionary.Keys.Address(),
-    Dictionary.Values.Bool(),
-  );
-  for (const [addr, val] of params.whitelist) {
-    dict = dict.set(Address.parse(addr), val);
-  }
   await openPool(network, params.poolAddress).sendUpdateNominatorsWhitelist(
     via,
     params.value,
     {
       queryId: params.queryId ?? 1n,
-      whitelist: dict,
+      whitelist: buildWhitelistDict(params.whitelist.keys()),
     },
   );
 }
