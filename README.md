@@ -117,6 +117,10 @@ groups:
   Owner-only.
 - **Nominator Whitelist** — Restricts deposits to a specific list of
   addresses. An empty list opens the pool to everyone. Owner-only.
+- **Evict Nominator** — Forces a nominator to exit the pool at the end of the
+  round. Their whole share is queued as a pending withdrawal and paid out via
+  the pending payout chain. Owner-only. See
+  [Evicting a nominator](#evicting-a-nominator).
 
 ### Round Info
 
@@ -436,6 +440,26 @@ repeat the steps with a non-zero share (e.g. `16.66`%).
 
 > **Note:** You can also use a **GRAM max** of `0` for the same effect, but
 > share-based is more intuitive since `0.00`% clearly means "nothing".
+
+### Evicting a nominator
+
+The owner can force a nominator out of the pool, for example, if you want to enforce the whitelist
+on the already running pool and some nominators don't fit it, or simply perform faster pool migration.
+Eviction queues the nominator's **entire** share as a
+pending withdrawal, to be paid out through the pending payout chain at the next
+clean round boundary (it does not pay out instantly).
+
+1. In the **Nominators** section, click **Evict Nominator**.
+2. **Nominator address** paste the address of the nominator to remove. If the
+   address is a current pool nominator, the panel previews its `amount` and
+   `reward` (and flags a pending deposit or an already-pending withdrawal).
+3. **Message value (GRAM)** must cover the withdrawal gas. The default of
+   `1` is well above the contract's `WITHDRAWAL_GAS` (0.2 TON) and is safe in
+   all cases; the leftover value is refunded to the sender.
+4. Click **Evict nominator** and approve in your wallet.
+
+The operation is
+owner-only and may itself rotate the round.
 
 ---
 
