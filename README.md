@@ -404,8 +404,9 @@ balance. Anyone can trigger recovery on the validator's behalf:
    amount of stake to recover — it's the forwarding value, capped at 1 GRAM.
    The default of `1` is correct in virtually all cases.
 5. **Message value (GRAM)** — must cover the recovery message value plus
-   gas fees (e.g. if recovery value is `1`, set message value higher.
-   For example `2`).
+   gas fees. The default of `2` (covering a recovery value of `1` plus gas)
+   is correct in virtually all cases; lowering it risks the contract bouncing
+   the message.
 6. Click **Recover stake** and approve in your wallet.
 7. The recovered stake returns to the pool balance. Repeat for each round
    the validator missed.

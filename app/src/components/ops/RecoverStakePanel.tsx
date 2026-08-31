@@ -25,7 +25,7 @@ export function RecoverStakePanel() {
   // switches away from the Recover Stake tab.
   const [validatorAddr, setValidatorAddr] = useState('');
   const [recoverAmount, setRecoverAmount] = useState('1');
-  const [msgValue, setMsgValue] = useState('1');
+  const [msgValue, setMsgValue] = useState('2');
 
   const { data: validatorsData } = useQuery({
     queryKey: ['pool-validators', network, poolAddress],
