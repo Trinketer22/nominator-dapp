@@ -43,7 +43,6 @@ export const POOL_ERROR_CODES: Record<number, string> = {
   401: 'Too many validators',
   402: 'Nominators map is too deep',
   403: 'Withdrawal must be pending (internal consistency check failed)',
-  500: 'Invalid new-stake message body',
   501: 'Round is too early',
   502: 'Recovery time is too early',
   600: 'Validator not found in the pool',
