@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Address } from '@ton/core';
 import {
@@ -18,7 +18,11 @@ import { PoolInfoPanel } from './components/PoolInfoPanel';
 import { RoundInfoPanel } from './components/RoundInfoPanel';
 import { Field, AddrLink } from './components/ui/form';
 import { useRouter } from './lib/router';
-import { formatAddressForNetwork, isValidAddress } from './lib/ton';
+import {
+  formatAddressForNetwork,
+  isValidAddress,
+  detectAddressNetwork,
+} from './lib/ton';
 import { getPoolOwner, verifyPoolCode } from './lib/pool';
 import { IconTonDiamond } from './components/TonDiamond';
 
@@ -78,13 +82,24 @@ export default function App() {
   // avoid firing queries / parsing it elsewhere with an invalid string.
   const poolAddrValid = isValidAddress(poolAddr);
 
-  // Auto-select the network based on the connected wallet's chain.
+  // The pool address (in friendly form) carries a testnet flag and is the
+  // source of truth for which network to query — pasting a testnet pool
+  // address switches the app to testnet so the matching Toncenter API key is
+  // used. Raw addresses carry no testnet bit, so when the address is absent or
+  // raw we fall back to the connected wallet's chain, keeping the Deploy tab
+  // aligned with the wallet when no pool address has been entered yet.
   const chain = tc?.account?.chain;
+  const poolAddrNetwork = useMemo(
+    () => (poolAddrValid ? detectAddressNetwork(poolAddr) : null),
+    [poolAddr, poolAddrValid],
+  );
   useEffect(() => {
-    if (!chain) return;
-    const walletIsTestnet = chain === '-3';
-    setTestnet(walletIsTestnet);
-  }, [chain, setTestnet]);
+    if (poolAddrNetwork) {
+      setTestnet(poolAddrNetwork === 'testnet');
+    } else if (chain) {
+      setTestnet(chain === '-3');
+    }
+  }, [poolAddrNetwork, chain, setTestnet]);
 
   // Fetch the pool owner to show owner status near the network indicator.
   // A failed get-method means the contract is not deployed (or not reachable),

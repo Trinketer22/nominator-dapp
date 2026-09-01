@@ -20,7 +20,7 @@ import {
   requireOwner,
   verifyPoolCode,
 } from '@/lib/pool';
-import { tonscanTxUrl } from '@/lib/ton';
+import { tonscanTxUrl, detectAddressNetwork, networkLabel } from '@/lib/ton';
 import {
   getWalletBaselineLt,
   waitForRefund,
@@ -83,6 +83,17 @@ export function PoolOpsProvider({
     () => (tc && wallet && tc.account ? makeSender(tc, network) : null),
     [tc, network, wallet],
   );
+
+  // A friendly pool address carries a testnet flag; when it disagrees with the
+  // connected wallet's chain the wallet can't sign operations for this pool, so
+  // the provider blocks the operation tabs below. Raw addresses carry no flag
+  // and are not gated here (their network is undetectable from the address).
+  const chain = tc?.account?.chain;
+  const poolAddrNetwork = detectAddressNetwork(poolAddress);
+  const walletNetwork =
+    chain === '-3' ? 'testnet' : chain === '-239' ? 'mainnet' : null;
+  const networkMismatch =
+    !!poolAddrNetwork && !!walletNetwork && poolAddrNetwork !== walletNetwork;
 
   // getPoolOwner's get-method throws when the contract is not deployed or is
   // not a pool at all. verifyPoolCode distinguishes a different-version pool
@@ -221,6 +232,22 @@ export function PoolOpsProvider({
           {restored
             ? 'Connect your wallet to perform pool operations.'
             : 'Restoring wallet connection...'}
+        </p>
+      </div>
+    );
+  }
+
+  if (networkMismatch) {
+    const poolNet = networkLabel(poolAddrNetwork!);
+    const walletNet = networkLabel(walletNetwork!);
+    return (
+      <div className="w-full max-w-md rounded-xl border border-warning/50 bg-warning/10 p-5 flex flex-col gap-2 text-center">
+        <p className="text-[13px] font-semibold text-warning">
+          Wallet network mismatch
+        </p>
+        <p className="text-[13px] text-foreground/90">
+          The connected wallet is on {walletNet} but the pool address is on{' '}
+          {poolNet}. Connect a wallet on {poolNet} to manage this pool.
         </p>
       </div>
     );

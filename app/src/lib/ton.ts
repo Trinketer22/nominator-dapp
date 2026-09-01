@@ -62,7 +62,7 @@ export function tonscanAddrUrl(network: Network, addr: string): string {
 }
 
 export function networkLabel(network: Network): string {
-  return network === 'testnet' ? 'Testnet' : 'Mainnet';
+  return network === 'testnet' ? 'testnet' : 'mainnet';
 }
 
 export function networkChain(network: Network): CHAIN {
@@ -90,6 +90,19 @@ export function isValidAddress(address: string): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+// Detects whether a user-friendly address carries the testnet flag. Raw
+// addresses (`workchain:hash`) carry no testnet bit, so this returns null for
+// them — their network must be determined another way (e.g. the connected
+// wallet's chain). Also returns null for unparseable input.
+export function detectAddressNetwork(address: string): Network | null {
+  try {
+    if (!Address.isFriendly(address)) return null;
+    return Address.parseFriendly(address).isTestOnly ? 'testnet' : 'mainnet';
+  } catch {
+    return null;
   }
 }
 
